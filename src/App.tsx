@@ -10,6 +10,7 @@ import { fetchCurrentUser, type AuthUser } from './auth';
 import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, listMyAuctions, placeBid as placeBidApi, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
 import { answerAuctionQuestion, askAuctionQuestion, listNotifications, markAllNotificationsRead, markNotificationRead, type CampusNotification } from './activityApi';
 import NotificationPanel from './NotificationPanel';
+import { ApiError } from './apiError';
 
 type Bid = { bidderId: number; bidder: string; amount: number; time: number };
 type Question = { id: number; askerId: number; author: string; text: string; answer?: string; createdAt: number; answeredAt?: number };
@@ -98,6 +99,10 @@ function App() {
         setAuctionsError('');
       } catch (error) {
         if (!active) return;
+        if (error instanceof ApiError && error.status === 401) {
+          expireSession();
+          return;
+        }
         const message = error instanceof Error ? error.message : 'Could not load campus listings.';
         if (!hasLoaded) {
           setAuctions([]);
@@ -152,6 +157,18 @@ function App() {
   const showNotice = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(''), 2800);
+  };
+
+  const expireSession = () => {
+    localStorage.removeItem('sellgoods.user');
+    localStorage.removeItem('sellgoods.token');
+    setAuthUser(null);
+    setAuctions([]);
+    setMyAuctions([]);
+    setNotifications([]);
+    setAuctionsError('');
+    setActiveTab('Marketplace');
+    showNotice('Your session expired. Please log in again.');
   };
 
   const toggleWatch = (id: number) => setAuctions((items) => items.map((item) => item.id === id ? { ...item, watched: !item.watched } : item));

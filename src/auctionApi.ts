@@ -1,3 +1,5 @@
+import { responseError } from './apiError';
+
 export type AuctionRecord = {
   id: number;
   seller_id: number;
@@ -29,7 +31,7 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
     },
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Could not load auctions. Please try again.');
+  if (!response.ok) throw responseError(response.status, data.detail, 'Could not load auctions. Please try again.');
   return data as T;
 }
 

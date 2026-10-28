@@ -15,7 +15,7 @@ Create a production build with `npm run build`.
 
 The API uses FastAPI, SQLAlchemy, PostgreSQL, Argon2 password hashes, and signed bearer access tokens. Signup requires a name, valid email, and password with at least 10 characters. Set `CAMPUS_EMAIL_DOMAIN` in `backend/.env` to restrict signups to your institution.
 
-1. Copy `backend/.env.example` to `backend/.env` and set a long random `JWT_SECRET`.
+1. Copy `backend/.env.example` to `backend/.env` and set a long random `JWT_SECRET`. Keep this secret unchanged between restarts; changing it invalidates existing browser sessions, which will need to log in again.
 2. Install PostgreSQL locally, start the PostgreSQL service, and create a database named `sellgoods` (or update `DATABASE_URL` to match your local role and password).
 3. Install dependencies with `python -m pip install -r backend/requirements.txt`.
 4. Start the API from the repository root with `python -m uvicorn app.main:app --app-dir backend --reload`.

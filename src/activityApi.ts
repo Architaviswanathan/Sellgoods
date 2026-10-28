@@ -1,3 +1,5 @@
+import { responseError } from './apiError';
+
 export type AuctionQuestion = {
   id: number;
   asker_id: number;
@@ -30,7 +32,7 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
     },
   });
   const data = response.status === 204 ? null : await response.json();
-  if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Could not complete this action.');
+  if (!response.ok) throw responseError(response.status, data?.detail, 'Could not complete this action.');
   return data as T;
 }
 
