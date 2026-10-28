@@ -14,7 +14,7 @@ export type CampusNotification = {
   id: number;
   auction_id: number;
   actor_id: number;
-  kind: 'bid' | 'question' | 'answer';
+  kind: 'bid' | 'question' | 'answer' | 'listing' | 'update' | 'ended' | 'outcome';
   message: string;
   created_at: string;
   read_at: string | null;

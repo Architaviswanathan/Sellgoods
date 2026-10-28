@@ -19,6 +19,16 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
     if actual_status == "live" and ends_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
         bids = database.scalars(select(Bid).where(Bid.auction_id == auction.id).order_by(Bid.created_at, Bid.id)).all()
         actual_status = "closed" if bids else "unsold"
+        if auction.status == "live" and actual_status in ("closed", "unsold"):
+            auction.status = actual_status
+            database.add(Notification(
+                recipient_id=auction.seller_id,
+                actor_id=auction.seller_id,
+                auction_id=auction.id,
+                kind="ended",
+                message=f"Auction for {auction.title} ended." if actual_status == "closed" else f"Auction for {auction.title} ended (unsold).",
+            ))
+            database.commit()
     bids = database.scalars(select(Bid).where(Bid.auction_id == auction.id).order_by(Bid.created_at, Bid.id)).all()
     public_bids = []
     for bid in bids:
@@ -112,6 +122,16 @@ def create_auction(
     database.add(auction)
     database.commit()
     database.refresh(auction)
+    # Notify seller about listing creation
+    database.add(Notification(
+        recipient_id=current_user.id,
+        actor_id=current_user.id,
+        auction_id=auction.id,
+        kind="listing",
+        message=f"You listed {auction.title}.",
+    ))
+    database.commit()
+    database.refresh(auction)
     return serialize_auction(auction, database)
 
 
@@ -134,10 +154,21 @@ def update_auction(
     has_bids = database.scalar(select(Bid.id).where(Bid.auction_id == auction.id).limit(1)) is not None
     if has_bids:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Listings cannot be edited after bidding starts.")
+    price_changed = False
+    if "starting_price" in payload.model_fields_set:
+        price_changed = True
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(auction, key, value)
     if "starting_price" in payload.model_fields_set:
         auction.current_price = payload.starting_price
+    if price_changed:
+        database.add(Notification(
+            recipient_id=auction.seller_id,
+            actor_id=current_user.id,
+            auction_id=auction.id,
+            kind="update",
+            message=f"Price updated for {auction.title}.",
+        ))
     database.commit()
     database.refresh(auction)
     return serialize_auction(auction, database)
@@ -157,6 +188,13 @@ def cancel_auction(
     if auction.status != "live":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This auction is no longer live.")
     auction.status = "cancelled"
+    database.add(Notification(
+        recipient_id=auction.seller_id,
+        actor_id=current_user.id,
+        auction_id=auction.id,
+        kind="outcome",
+        message=f"You cancelled {auction.title}.",
+    ))
     database.commit()
     database.refresh(auction)
     return serialize_auction(auction, database)

@@ -277,8 +277,9 @@ function App() {
     if (!token) return;
     try {
       await askAuctionQuestion(token, selected.id, text);
-      const updated = await listAuctions(token);
-      setAuctions(updated.map((record) => toAuction(record) as Auction));
+      const [updatedAuctions, updatedMyAuctions] = await Promise.all([listAuctions(token), listMyAuctions(token)]);
+      setAuctions(updatedAuctions.map((record) => toAuction(record) as Auction));
+      setMyAuctions(updatedMyAuctions.map((record) => toAuction(record) as Auction));
       formElement.reset();
       showNotice('Question sent to the seller.');
     } catch (error) {
@@ -467,14 +468,30 @@ function App() {
           </div>
           <div className="questions-block">
             <div className="subheading-row"><h3><MessageCircle size={16} /> Questions <span>{selected.questions.length}</span></h3><span>Keep it useful</span></div>
-            {selected.questions.map((question, index) => <div className="question-entry" key={`${question.text}-${index}`}>
+            {selected.questions.map((question, index) => <div className="question-entry" key={`${question.id ?? question.text}-${index}`}>
               <strong>{question.author}</strong>
               <p>{question.text}</p>
-              {question.answer && <div className="seller-answer"><span>SELLER</span>{question.answer}</div>}
-            </div>)}<form className="question-form" onSubmit={sendQuestion}>
+              {question.answer ? <div className="seller-answer"><span>SELLER</span>{question.answer}</div> : selected.sellerId === authUser.id ? (
+                <form onSubmit={async (event) => {
+                  event.preventDefault();
+                  const form = event.currentTarget;
+                  const formData = new FormData(form);
+                  const answer = String(formData.get('answer')).trim();
+                  if (!answer) return;
+                  await answerQuestion(selected.id, question.id, answer);
+                  form.reset();
+                }} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <input name="answer" placeholder="Reply to this question..." maxLength={1000} required style={{ flex: 1 }} />
+                  <button type="submit" style={{ padding: '6px 12px' }}>Reply</button>
+                </form>
+              ) : null}
+            </div>)}
+            {selected.sellerId !== authUser.id && <form className="question-form" onSubmit={sendQuestion}>
               <input name="question" placeholder="Ask the seller something specific..." maxLength={240} required />
               <button aria-label="Send question"><Send size={16} /></button>
-            </form></div></div></section></div>}
+            </form>}
+            {selected.sellerId === authUser.id && selected.questions.length === 0 && <p style={{ fontSize: '11px', color: '#7b8376' }}>No questions yet.</p>}
+          </div></div></section></div>}
 
       {modal === 'listing' && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}><section className="form-modal" role="dialog" aria-modal="true" aria-label="List an item">
         <div className="form-modal-heading"><div><div className="eyebrow dark-eyebrow"><span /> PASS IT ON</div><h2>List something <span>good.</span></h2></div>
