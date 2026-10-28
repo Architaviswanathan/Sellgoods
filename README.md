@@ -17,6 +17,7 @@ Create a production build with `npm run build`.
 - Listing creation with item details, a local photo, opening bid, increment, and auction duration.
 - Per-item countdowns, public bid history, bid validation, and a 60-second anti-sniping extension for bids in the final 30 seconds.
 - Item-specific buyer questions, saved auctions, browser notification permission, and a natural-language search assistant.
+- Seller workspace to edit or cancel listings, approve or reject a winning price, and record confirmed or failed pickup outcomes.
 - Automatic bid limit controls and search alerts are represented in the interface.
 
 ## Demo limitations
