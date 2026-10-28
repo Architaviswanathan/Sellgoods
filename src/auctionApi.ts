@@ -1,4 +1,5 @@
 import { responseError } from './apiError';
+import { API_URL, networkError } from './apiConfig';
 
 export type AuctionRecord = {
   id: number;
@@ -19,19 +20,22 @@ export type AuctionRecord = {
   questions: { id: number; asker_id: number; asker: string; text: string; answer: string | null; created_at: string; answered_at: string | null }[];
 };
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
-
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
-    },
-  });
-  const data = await response.json();
-  if (!response.ok) throw responseError(response.status, data.detail, 'Could not load auctions. Please try again.');
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw networkError();
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw responseError(response.status, data?.detail, 'Could not load auctions. Please try again.');
   return data as T;
 }
 

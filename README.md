@@ -13,13 +13,26 @@ Create a production build with `npm run build`.
 
 ## Backend and PostgreSQL
 
-The API uses FastAPI, SQLAlchemy, PostgreSQL, Argon2 password hashes, and signed bearer access tokens. Signup requires a name, valid email, and password with at least 10 characters. Set `CAMPUS_EMAIL_DOMAIN` in `backend/.env` to restrict signups to your institution.
+The API uses FastAPI, SQLAlchemy, Argon2 password hashes, and signed bearer access tokens. Signup requires a name, valid email, and password with at least 10 characters.
 
-1. Copy `backend/.env.example` to `backend/.env` and set a long random `JWT_SECRET`. Keep this secret unchanged between restarts; changing it invalidates existing browser sessions, which will need to log in again.
+Quick start (no database server needed): the API defaults to a local SQLite file, `sellgoods-local.db` in the repository root.
+
+```sh
+python -m pip install -r backend/requirements.txt
+python -m uvicorn app.main:app --app-dir backend --reload
+```
+
+The frontend connects to the API on port 8000 of whichever host opened the app, so `http://localhost:5173` and `http://127.0.0.1:5173` both work. Set `VITE_API_URL` in a `.env` file if your API lives somewhere else.
+
+To use PostgreSQL instead:
+
+1. Copy `backend/.env.example` to `backend/.env`, set `DATABASE_URL` to your PostgreSQL URL, and set a long random `JWT_SECRET`. Keep this secret unchanged between restarts; changing it invalidates existing browser sessions, which will need to log in again.
 2. Install PostgreSQL locally, start the PostgreSQL service, and create a database named `sellgoods` (or update `DATABASE_URL` to match your local role and password).
 3. Install dependencies with `python -m pip install -r backend/requirements.txt`.
 4. Start the API from the repository root with `python -m uvicorn app.main:app --app-dir backend --reload`.
 5. In another terminal, run the frontend with `npm run dev -- --host 127.0.0.1`.
+
+Set `CAMPUS_EMAIL_DOMAIN` in `backend/.env` to restrict signups to your institution.
 
 The API health check is `/api/health`; FastAPI's interactive endpoint docs are at `/docs`. Configure `VITE_API_URL` if the API is not at `http://127.0.0.1:8000`. Listings are stored in PostgreSQL and returned to every authenticated student. Listing images are resized in the browser and stored with their auction record.
 

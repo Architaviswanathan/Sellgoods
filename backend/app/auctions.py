@@ -12,6 +12,26 @@ from app.schemas import AuctionCreate, AuctionResponse, AuctionUpdate, BidCreate
 router = APIRouter(prefix="/api/auctions", tags=["auctions"])
 
 
+def broadcast_alert(
+    database: Session,
+    actor: User,
+    auction: Auction,
+    kind: str,
+    message: str,
+) -> None:
+    """Send one inbox alert to every student except the person who acted."""
+    recipient_ids = database.scalars(select(User.id).where(User.id != actor.id)).all()
+    for recipient_id in recipient_ids:
+        database.add(Notification(
+            recipient_id=recipient_id,
+            actor_id=actor.id,
+            auction_id=auction.id,
+            kind=kind,
+            message=message[:240],
+        ))
+    database.commit()
+
+
 def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
     seller = database.get(User, auction.seller_id)
     actual_status = auction.status
@@ -54,18 +74,6 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
             created_at=question.created_at,
             answered_at=question.answered_at,
         ))
-    def _default_image(title: str, category: str) -> str:
-        t = (title + " " + category).lower()
-        if "cycle" in t or "bike" in t or "bicycle" in t:
-            return "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=960&q=85"
-        if "calculator" in t or "scientific" in t or "casio" in t:
-            return "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=960&q=85"
-        if "book" in t or "textbook" in t or "notes" in t:
-            return "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=960&q=85"
-        if "laptop" in t or "phone" in t or "electronics" in t or "charger" in t:
-            return "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=960&q=85"
-        return "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=960&q=85"
-
     return AuctionResponse(
         id=auction.id,
         seller_id=auction.seller_id,
@@ -74,7 +82,9 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
         category=auction.category,
         condition=auction.condition,
         description=auction.description,
-        image=auction.image_url or _default_image(auction.title, auction.category),
+        # No stock photo: the client draws a label card from the item's own
+        # title and category when the seller has not uploaded a photo.
+        image=auction.image_url or "",
         price=auction.current_price,
         starting_price=auction.starting_price,
         increment=auction.increment,
@@ -134,15 +144,13 @@ def create_auction(
     database.add(auction)
     database.commit()
     database.refresh(auction)
-    # Notify seller about listing creation
-    database.add(Notification(
-        recipient_id=current_user.id,
-        actor_id=current_user.id,
-        auction_id=auction.id,
+    broadcast_alert(
+        database,
+        actor=current_user,
+        auction=auction,
         kind="listing",
-        message=f"You listed {auction.title}.",
-    ))
-    database.commit()
+        message=f"New listing: {auction.title} ({auction.category}) from {current_user.name}.",
+    )
     database.refresh(auction)
     return serialize_auction(auction, database)
 
@@ -166,23 +174,22 @@ def update_auction(
     has_bids = database.scalar(select(Bid.id).where(Bid.auction_id == auction.id).limit(1)) is not None
     if has_bids:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Listings cannot be edited after bidding starts.")
-    price_changed = False
-    if "starting_price" in payload.model_fields_set:
-        price_changed = True
+    price_changed = "starting_price" in payload.model_fields_set
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(auction, key, value)
-    if "starting_price" in payload.model_fields_set:
-        auction.current_price = payload.starting_price
     if price_changed:
-        database.add(Notification(
-            recipient_id=auction.seller_id,
-            actor_id=current_user.id,
-            auction_id=auction.id,
-            kind="update",
-            message=f"Price updated for {auction.title}.",
-        ))
+        auction.current_price = payload.starting_price or auction.current_price
     database.commit()
     database.refresh(auction)
+    if price_changed:
+        broadcast_alert(
+            database,
+            actor=current_user,
+            auction=auction,
+            kind="update",
+            message=f"{auction.title} now starts at ₹{auction.starting_price}.",
+        )
+        database.refresh(auction)
     return serialize_auction(auction, database)
 
 

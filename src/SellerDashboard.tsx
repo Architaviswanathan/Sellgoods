@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Clock3, Pencil, ShieldCheck, X } from 'lucide-react';
+import ItemImage from './ItemImage';
 
 type SellerItem = {
   id: number;
@@ -64,7 +65,7 @@ export default function SellerDashboard({ items, sellerName, sellerEmail, now, o
       </div>
       {items.length ? <div className="seller-list">
         {items.map((item) => <article className="seller-item" key={item.id}>
-          <img src={item.image} alt={item.title} />
+          <ItemImage src={item.image} title={item.title} category={item.category} alt={item.title} />
           <div className="seller-item-main">
             <div className="seller-item-meta"><span>{item.category}</span><span>·</span><span className={`status-label status-${item.status.replace(' ', '-')}`}>{item.status}</span></div>
             <h2>{item.title}</h2>

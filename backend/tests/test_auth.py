@@ -253,7 +253,7 @@ class AuthenticationTests(unittest.TestCase):
 
         buyer_alerts = self.client.get("/api/notifications", headers=buyer_headers)
         self.assertEqual(buyer_alerts.status_code, 200)
-        self.assertEqual([item["kind"] for item in buyer_alerts.json()], ["answer"])
+        self.assertEqual([item["kind"] for item in buyer_alerts.json()], ["answer", "listing"])
 
         shared_auction = self.client.get("/api/auctions", headers=buyer_headers).json()[0]
         self.assertEqual(shared_auction["questions"][0]["answer"], "Yes, the brakes were checked this week.")

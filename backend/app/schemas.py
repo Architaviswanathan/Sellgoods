@@ -1,6 +1,18 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field
+
+# SQLite drops timezone information, so treat stored naive datetimes as UTC.
+# The browser then parses them correctly instead of assuming local time.
+UtcDateTime = Annotated[
+    datetime,
+    BeforeValidator(
+        lambda value: value.replace(tzinfo=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None
+        else value
+    ),
+]
 
 
 class SignupRequest(BaseModel):
@@ -36,7 +48,7 @@ class AuctionCreate(BaseModel):
     image_url: str | None = Field(default=None, max_length=2_000_000)
     starting_price: int = Field(gt=0)
     increment: int = Field(gt=0)
-    ends_at: datetime
+    ends_at: UtcDateTime
 
 
 class AuctionUpdate(BaseModel):
@@ -56,7 +68,7 @@ class BidResponse(BaseModel):
     bidder_id: int
     bidder: str
     amount: int
-    time: datetime
+    time: UtcDateTime
 
 
 class QuestionCreate(BaseModel):
@@ -73,8 +85,8 @@ class QuestionResponse(BaseModel):
     asker: str
     text: str
     answer: str | None
-    created_at: datetime
-    answered_at: datetime | None
+    created_at: UtcDateTime
+    answered_at: UtcDateTime | None
 
 
 class NotificationResponse(BaseModel):
@@ -85,8 +97,8 @@ class NotificationResponse(BaseModel):
     actor_id: int
     kind: str
     message: str
-    created_at: datetime
-    read_at: datetime | None
+    created_at: UtcDateTime
+    read_at: UtcDateTime | None
 
 
 class AuctionResponse(BaseModel):
@@ -101,7 +113,7 @@ class AuctionResponse(BaseModel):
     price: int
     starting_price: int
     increment: int
-    ends_at: datetime
+    ends_at: UtcDateTime
     status: str
     bids: list[BidResponse] = []
     watched: bool = False

@@ -1,4 +1,5 @@
 import { responseError } from './apiError';
+import { API_URL, networkError } from './apiConfig';
 
 export type AuctionQuestion = {
   id: number;
@@ -20,18 +21,21 @@ export type CampusNotification = {
   read_at: string | null;
 };
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
-
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
-    },
-  });
-  const data = response.status === 204 ? null : await response.json();
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw networkError();
+  }
+  const data = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) throw responseError(response.status, data?.detail, 'Could not complete this action.');
   return data as T;
 }

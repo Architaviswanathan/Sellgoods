@@ -16,9 +16,15 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Sellgoods API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=[
+        settings.frontend_origin,
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    # Vite picks another port when 5173 is busy, so allow any local port.
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.include_router(auth_router)
