@@ -12,7 +12,7 @@ export type AuctionRecord = {
   increment: number;
   ends_at: string;
   status: string;
-  bids: { bidder: string; amount: number; time: number }[];
+  bids: { bidder_id: number; bidder: string; amount: number; time: string }[];
   watched: boolean;
   questions: { author: string; text: string; answer?: string }[];
 };
@@ -67,6 +67,13 @@ export function cancelAuction(token: string, id: number): Promise<AuctionRecord>
   return request(`/api/auctions/${id}/cancel`, token, { method: 'POST' });
 }
 
+export function placeBid(token: string, id: number, amount: number): Promise<AuctionRecord> {
+  return request(`/api/auctions/${id}/bids`, token, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+}
+
 export function toAuction(record: AuctionRecord) {
   return {
     id: record.id,
@@ -81,7 +88,7 @@ export function toAuction(record: AuctionRecord) {
     increment: record.increment,
     endsAt: new Date(record.ends_at).getTime(),
     seller: record.seller,
-    bids: record.bids,
+    bids: record.bids.map((bid) => ({ bidderId: bid.bidder_id, bidder: bid.bidder, amount: bid.amount, time: new Date(bid.time).getTime() })),
     watched: record.watched,
     questions: record.questions,
     status: record.status,

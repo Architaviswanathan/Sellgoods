@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Auction, User
-from app.schemas import AuctionCreate, AuctionResponse, AuctionUpdate
+from app.models import Auction, Bid, User
+from app.schemas import AuctionCreate, AuctionResponse, AuctionUpdate, BidCreate, BidResponse
 
 router = APIRouter(prefix="/api/auctions", tags=["auctions"])
 
@@ -17,7 +17,18 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
     actual_status = auction.status
     ends_at = auction.ends_at
     if actual_status == "live" and ends_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
-        actual_status = "unsold"
+        bids = database.scalars(select(Bid).where(Bid.auction_id == auction.id).order_by(Bid.created_at, Bid.id)).all()
+        actual_status = "closed" if bids else "unsold"
+    bids = database.scalars(select(Bid).where(Bid.auction_id == auction.id).order_by(Bid.created_at, Bid.id)).all()
+    public_bids = []
+    for bid in bids:
+        bidder = database.get(User, bid.bidder_id)
+        public_bids.append(BidResponse(
+            bidder_id=bid.bidder_id,
+            bidder=bidder.name if bidder else "Campus student",
+            amount=bid.amount,
+            time=bid.created_at,
+        ))
     return AuctionResponse(
         id=auction.id,
         seller_id=auction.seller_id,
@@ -32,6 +43,7 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
         increment=auction.increment,
         ends_at=ends_at,
         status=actual_status,
+        bids=public_bids,
     )
 
 
@@ -90,6 +102,9 @@ def update_auction(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This auction is no longer live.")
     if auction.ends_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This auction has closed.")
+    has_bids = database.scalar(select(Bid.id).where(Bid.auction_id == auction.id).limit(1)) is not None
+    if has_bids:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Listings cannot be edited after bidding starts.")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(auction, key, value)
     if "starting_price" in payload.model_fields_set:
@@ -113,6 +128,38 @@ def cancel_auction(
     if auction.status != "live":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This auction is no longer live.")
     auction.status = "cancelled"
+    database.commit()
+    database.refresh(auction)
+    return serialize_auction(auction, database)
+
+
+@router.post("/{auction_id}/bids", response_model=AuctionResponse, status_code=status.HTTP_201_CREATED)
+def place_bid(
+    auction_id: int,
+    payload: BidCreate,
+    database: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AuctionResponse:
+    auction = database.scalar(select(Auction).where(Auction.id == auction_id).with_for_update())
+    if auction is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Auction not found.")
+    ends_at = auction.ends_at.replace(tzinfo=timezone.utc)
+    if auction.status != "live" or ends_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This auction has closed.")
+    if auction.seller_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot bid on your own listing.")
+    previous_bid = database.scalar(
+        select(Bid).where(Bid.auction_id == auction.id).order_by(Bid.amount.desc(), Bid.created_at.desc()).limit(1)
+    )
+    minimum_bid = auction.current_price + auction.increment if previous_bid else auction.starting_price
+    if payload.amount < minimum_bid:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"The minimum next bid is ₹{minimum_bid}.")
+
+    bid = Bid(auction_id=auction.id, bidder_id=current_user.id, amount=payload.amount)
+    auction.current_price = payload.amount
+    if ends_at - datetime.now(timezone.utc) <= timedelta(seconds=30):
+        auction.ends_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+    database.add(bid)
     database.commit()
     database.refresh(auction)
     return serialize_auction(auction, database)

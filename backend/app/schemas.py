@@ -48,6 +48,17 @@ class AuctionUpdate(BaseModel):
     increment: int | None = Field(default=None, gt=0)
 
 
+class BidCreate(BaseModel):
+    amount: int = Field(gt=0)
+
+
+class BidResponse(BaseModel):
+    bidder_id: int
+    bidder: str
+    amount: int
+    time: datetime
+
+
 class AuctionResponse(BaseModel):
     id: int
     seller_id: int
@@ -62,6 +73,6 @@ class AuctionResponse(BaseModel):
     increment: int
     ends_at: datetime
     status: str
-    bids: list[dict] = []
+    bids: list[BidResponse] = []
     watched: bool = False
     questions: list[dict] = []

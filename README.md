@@ -30,12 +30,13 @@ Run the auth tests from the repository root with `python -m unittest discover -s
 - Search and filter live listings by category, condition, and maximum price.
 - Listing creation with item details, a local photo, opening bid, increment, and auction duration.
 - Per-item countdowns, public bid history, bid validation, and a 60-second anti-sniping extension for bids in the final 30 seconds.
+- Persistent bids show the leading student's name and full public bid history in the seller workspace; sellers can manage their own listings by account ID.
 - Item-specific buyer questions, saved auctions, browser notification permission, and a natural-language search assistant.
 - Seller workspace to edit or cancel listings, approve or reject a winning price, and record confirmed or failed pickup outcomes.
 - Automatic bid limit controls and search alerts are represented in the interface.
 
 ## Demo limitations
 
-Authentication is the first backend-backed feature. Auction listings and bids remain sample frontend state in `src/App.tsx`; they are not yet persisted or shared between users. Automatic bidding, search alerts, and notifications are UI demonstrations, not persistent services. Listing photos use local browser preview URLs. Do not use this prototype for real transactions.
+Authentication, listings, and bids are stored by the backend and shared between authenticated users. Automatic bidding, search alerts, and notifications are UI demonstrations, not persistent services. Listing photos are resized in the browser and stored in the listing record. Do not use this prototype for real transactions.
 
-Before a real launch, add migrations, email verification and account recovery, secure production secret management, persistent auction APIs, server-enforced bid validation and closing, durable notifications, and seller outcome/handover workflows. Use HTTPS and a secure token storage strategy in production.
+Before a real launch, add formal schema migrations, email verification and account recovery, secure production secret management, durable notifications, and fully persisted seller outcome/handover workflows. Use HTTPS and a secure token storage strategy in production.

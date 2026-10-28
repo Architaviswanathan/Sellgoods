@@ -7,14 +7,14 @@ import {
 import SellerDashboard from './SellerDashboard';
 import AuthPage from './AuthPage';
 import { fetchCurrentUser, type AuthUser } from './auth';
-import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
+import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, placeBid as placeBidApi, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
 
-type Bid = { bidder: string; amount: number; time: number };
+type Bid = { bidderId: number; bidder: string; amount: number; time: number };
 type Question = { author: string; text: string; answer?: string };
 type Auction = {
   id: number; title: string; category: string; condition: string; description: string;
   image: string; price: number; startingPrice: number; increment: number; endsAt: number;
-  seller: string; bids: Bid[]; watched: boolean; questions: Question[];
+  sellerId: number; seller: string; bids: Bid[]; watched: boolean; questions: Question[];
   status: 'live' | 'closed' | 'unsold' | 'approved' | 'rejected' | 'cancelled' | 'sold' | 'failed pickup';
 };
 
@@ -159,21 +159,20 @@ function App() {
     }
   };
 
-  const placeBid = (event: React.FormEvent) => {
+  const placeBid = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected) return;
     const amount = Number(bidValue);
-    const minimum = selected.bids.length ? selected.price + selected.increment : selected.startingPrice;
-    if (selected.endsAt <= Date.now()) return showNotice('This auction has closed.');
-    if (amount < minimum) return showNotice(`Enter at least ${money(minimum)}.`);
-    const bid: Bid = { bidder: authUser?.name ?? 'You', amount, time: Date.now() };
-    setAuctions((items) => items.map((item) => {
-      if (item.id !== selected.id) return item;
-      const extended = item.endsAt - Date.now() <= 30_000;
-      return { ...item, price: amount, bids: [...item.bids, bid], endsAt: extended ? Date.now() + 60_000 : item.endsAt };
-    }));
-    setBidValue('');
-    showNotice(selected.endsAt - Date.now() <= 30_000 ? 'Bid placed. Auction extended by 60 seconds.' : 'Your bid is on the board.');
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) return showNotice('Please log in to bid.');
+    try {
+      const updated = await placeBidApi(token, selected.id, amount);
+      setAuctions((items) => items.map((item) => item.id === selected.id ? toAuction(updated) as Auction : item));
+      setBidValue('');
+      showNotice('Bid placed. The seller can see you are leading.');
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Could not place your bid.');
+    }
   };
 
   const createListing = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -314,7 +313,7 @@ function App() {
 
       {activeTab === 'My activity' && <main className="activity-page"><div className="eyebrow dark-eyebrow"><span /> YOUR CAMPUS EXCHANGE</div><div className="section-heading"><div><h1>Your <span>activity.</span></h1><p className="activity-intro">Keep an eye on the things you care about.</p></div><button className="button-outline" onClick={enableNotifications}><Bell size={16} /> Turn on alerts</button></div><div className="activity-columns"><section><div className="activity-heading"><h2><Heart size={18} /> Saved auctions</h2><span>{auctions.filter((item) => item.watched).length}</span></div>{auctions.filter((item) => item.watched).length ? <div className="activity-list">{auctions.filter((item) => item.watched).map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)}><img src={item.image} alt="" /><span><strong>{item.title}</strong><small>{item.status === 'live' ? `Closes in ${timeLeft(item.endsAt, now)}` : 'Auction closed'}</small></span><b>{money(item.price)}</b><ChevronRight size={17} /></button>)}</div> : <p className="activity-empty">Save an auction with the heart and it will show up here.</p>}</section><section><div className="activity-heading"><h2><Bell size={18} /> Search alerts</h2><button className="small-add" onClick={() => setModal('watch')}><Plus size={15} /> New alert</button></div><div className="alert-placeholder"><span><Search size={20} /></span><strong>Don't miss the right listing.</strong><p>Set a search alert and we'll let you know when something matching turns up.</p><button className="text-link" onClick={() => setModal('watch')}>Create a search alert <ArrowRight size={14} /></button></div></section></div></main>}
 
-      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.seller === authUser.name)} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} />}
+      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.sellerId === authUser.id)} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} />}
 
       <footer className="site-footer"><a className="brand footer-brand" href="#home"><span className="brand-mark"><Tag size={16} strokeWidth={2.5} /></span><span>sellgoods<span className="brand-period">.</span></span></a><span>Good things find their next person.</span><div><button onClick={() => showNotice('All bids and bidder names are public on each auction.')}>The ground rules</button><i /> <button onClick={() => showNotice('Made for campus, by campus.')}>About</button></div><span className="footer-year">CAMPUS, IN CIRCULATION © 2026</span></footer>
 

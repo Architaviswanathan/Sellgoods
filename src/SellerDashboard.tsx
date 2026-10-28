@@ -3,6 +3,7 @@ import { ArrowRight, Check, Clock3, Pencil, ShieldCheck, X } from 'lucide-react'
 
 type SellerItem = {
   id: number;
+  sellerId: number;
   title: string;
   category: string;
   condition: string;
@@ -12,7 +13,7 @@ type SellerItem = {
   startingPrice: number;
   increment: number;
   endsAt: number;
-  bids: { bidder: string; amount: number; time: number }[];
+  bids: { bidderId: number; bidder: string; amount: number; time: number }[];
   status: 'live' | 'closed' | 'unsold' | 'approved' | 'rejected' | 'cancelled' | 'sold' | 'failed pickup';
 };
 
@@ -65,13 +66,15 @@ export default function SellerDashboard({ items, now, onUpdate, onOutcome }: Sel
             <h2>{item.title}</h2>
             <p>{item.description}</p>
             <div className="seller-item-stats"><strong>{money(item.price)}</strong><span>{item.bids.length} public bids</span>{item.status === 'live' && <span><Clock3 size={13} /> {remaining(item.endsAt, now)} left</span>}</div>
+            {item.bids.length > 0 && <div className="seller-bid-summary"><span>{item.status === 'live' ? 'Currently leading' : 'Provisional winner'}</span><strong>{[...item.bids].sort((a, b) => b.amount - a.amount || b.time - a.time)[0].bidder}</strong><b>{money(Math.max(...item.bids.map((bid) => bid.amount)))}</b></div>}
+            {item.bids.length > 0 && <details className="seller-bid-history"><summary>View public bid history <span>{item.bids.length}</span></summary>{[...item.bids].sort((a, b) => b.amount - a.amount).map((bid) => <div key={`${bid.bidderId}-${bid.time}`}><strong>{bid.bidder}</strong><time>{new Date(bid.time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time><b>{money(bid.amount)}</b></div>)}</details>}
             {item.status === 'live' && <div className="seller-controls">
               {item.bids.length === 0 && <button className="button-outline" onClick={() => setEditing(item)}><Pencil size={14} /> Edit listing</button>}
               {item.bids.length > 0 && <span className="seller-hint">Editing is locked after the first bid.</span>}
               <button className="seller-cancel" onClick={() => onOutcome(item.id, 'cancelled')}><X size={14} /> Cancel auction</button>
             </div>}
             {item.status === 'closed' && <div className="seller-outcome">
-              <span className="outcome-winner">Provisional winner <strong>{item.bids[item.bids.length - 1]?.bidder}</strong> · {money(item.price)}</span>
+              <span className="outcome-winner">Provisional winner <strong>{[...item.bids].sort((a, b) => b.amount - a.amount || b.time - a.time)[0]?.bidder}</strong> · {money(item.price)}</span>
               <button className="button-dark" onClick={() => onOutcome(item.id, 'approved')}><Check size={14} /> Approve price</button>
               <button className="button-outline" onClick={() => onOutcome(item.id, 'rejected')}>Reject price</button>
             </div>}
