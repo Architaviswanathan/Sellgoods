@@ -11,6 +11,20 @@ npm run dev
 
 Create a production build with `npm run build`.
 
+## Backend and PostgreSQL
+
+The API uses FastAPI, SQLAlchemy, PostgreSQL, Argon2 password hashes, and signed bearer access tokens. Signup requires a name, valid email, and password with at least 10 characters. Set `CAMPUS_EMAIL_DOMAIN` in `backend/.env` to restrict signups to your institution.
+
+1. Copy `backend/.env.example` to `backend/.env` and set a long random `JWT_SECRET`.
+2. Install PostgreSQL locally, start the PostgreSQL service, and create a database named `sellgoods` (or update `DATABASE_URL` to match your local role and password).
+3. Install dependencies with `python -m pip install -r backend/requirements.txt`.
+4. Start the API from the repository root with `python -m uvicorn app.main:app --app-dir backend --reload`.
+5. In another terminal, run the frontend with `npm run dev -- --host 127.0.0.1`.
+
+The API health check is `/api/health`; FastAPI's interactive endpoint docs are at `/docs`. Configure `VITE_API_URL` if the API is not at `http://127.0.0.1:8000`. Listings are stored in PostgreSQL and returned to every authenticated student. Listing images are resized in the browser and stored with their auction record.
+
+Run the auth tests from the repository root with `python -m unittest discover -s backend/tests -v`. They use in-memory SQLite and do not need PostgreSQL.
+
 ## What is here
 
 - Search and filter live listings by category, condition, and maximum price.
@@ -22,6 +36,6 @@ Create a production build with `npm run build`.
 
 ## Demo limitations
 
-This is a front-end prototype. Sample listings are in `src/App.tsx`; auction state is held in browser memory and resets on reload. Automatic bidding, search alerts, and notifications are UI demonstrations, not persistent services. The current photo selection creates a local browser preview URL. There is no sign-in, shared real-time bidding, server-side auction clock, seller approval or cancellation workflow, or handover record yet. Do not use this prototype for real transactions.
+Authentication is the first backend-backed feature. Auction listings and bids remain sample frontend state in `src/App.tsx`; they are not yet persisted or shared between users. Automatic bidding, search alerts, and notifications are UI demonstrations, not persistent services. Listing photos use local browser preview URLs. Do not use this prototype for real transactions.
 
-Before a real launch, connect a backend with campus authentication, persistent storage, server-enforced bid validation and closing, durable notifications, and seller outcome/handover workflows.
+Before a real launch, add migrations, email verification and account recovery, secure production secret management, persistent auction APIs, server-enforced bid validation and closing, durable notifications, and seller outcome/handover workflows. Use HTTPS and a secure token storage strategy in production.

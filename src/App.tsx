@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownUp, ArrowRight, Bell, Bike, BookOpen, Check, ChevronDown, ChevronRight,
-  Clock3, Filter, Heart, HelpCircle, Laptop, Menu, MessageCircle, Plus, Search,
+  Clock3, Filter, Heart, HelpCircle, Laptop, Menu, MessageCircle, Plus, Search, LogOut,
   Send, ShieldCheck, Sparkles, Tag, X,
 } from 'lucide-react';
 import SellerDashboard from './SellerDashboard';
+import AuthPage from './AuthPage';
+import { fetchCurrentUser, type AuthUser } from './auth';
+import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
 
 type Bid = { bidder: string; amount: number; time: number };
 type Question = { author: string; text: string; answer?: string };
@@ -16,15 +19,6 @@ type Auction = {
 };
 
 const hour = 60 * 60 * 1000;
-const initialAuctions: Auction[] = [
-  { id: 1, title: 'Riverside city bicycle', category: 'Cycles', condition: 'Good', description: 'A dependable single-speed that has done its job around campus. Brakes recently adjusted, bell included, and ready for its next commute.', image: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=960&q=85', price: 1400, startingPrice: 1200, increment: 50, endsAt: Date.now() + 2.4 * hour, seller: 'Mira S.', bids: [{ bidder: 'Arjun K.', amount: 1200, time: Date.now() - 3.2 * hour }, { bidder: 'Nisha R.', amount: 1300, time: Date.now() - 2.8 * hour }, { bidder: 'Dev P.', amount: 1400, time: Date.now() - 1.4 * hour }], watched: false, questions: [{ author: 'Tara M.', text: 'Do both brakes work properly?', answer: 'Yes, both were adjusted last week.' }], status: 'live' },
-  { id: 2, title: 'Casio fx-991EX ClassWiz', category: 'Electronics', condition: 'Like new', description: 'Barely used scientific calculator. Comes with its hard case and original box. All buttons and display are in excellent shape.', image: 'https://images.unsplash.com/photo-1587145820266-a5951ee6f620?auto=format&fit=crop&w=960&q=85', price: 350, startingPrice: 250, increment: 25, endsAt: Date.now() + 5.2 * hour, seller: 'Rohan D.', bids: [{ bidder: 'Aditi P.', amount: 250, time: Date.now() - 6 * hour }, { bidder: 'Ishaan T.', amount: 300, time: Date.now() - 4.1 * hour }, { bidder: 'Kavya M.', amount: 350, time: Date.now() - 1.1 * hour }], watched: false, questions: [], status: 'live' },
-  { id: 3, title: 'Engineering mathematics set', category: 'Books', condition: 'Good', description: 'Kreyszig Advanced Engineering Mathematics, 10th edition. Clean pages with a few pencil notes in the first two chapters.', image: 'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=960&q=85', price: 280, startingPrice: 200, increment: 20, endsAt: Date.now() + 22 * 60 * 1000, seller: 'Nitin B.', bids: [{ bidder: 'Riya S.', amount: 200, time: Date.now() - 3 * hour }, { bidder: 'Arjun K.', amount: 240, time: Date.now() - 1.3 * hour }, { bidder: 'Tara M.', amount: 280, time: Date.now() - 35 * 60 * 1000 }], watched: true, questions: [{ author: 'Dev P.', text: 'Are there any pages missing?', answer: 'No pages missing. The notes are only in pencil.' }], status: 'live' },
-  { id: 4, title: 'Sony WH-CH720N headphones', category: 'Electronics', condition: 'Very good', description: 'Lightweight noise cancelling headphones. Battery still lasts all week, includes the USB-C cable and carry pouch.', image: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=960&q=85', price: 2100, startingPrice: 1800, increment: 100, endsAt: Date.now() + 1.1 * hour, seller: 'Zoya A.', bids: [{ bidder: 'Mehul J.', amount: 1800, time: Date.now() - 4.5 * hour }, { bidder: 'Sara L.', amount: 2000, time: Date.now() - 2.2 * hour }, { bidder: 'Nisha R.', amount: 2100, time: Date.now() - 50 * 60 * 1000 }], watched: false, questions: [], status: 'live' },
-  { id: 5, title: 'The complete studio art kit', category: 'Other', condition: 'Good', description: 'Acrylics, brushes, palette knives and a sturdy zip case. Good starter set for painting electives or weekend projects.', image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=960&q=85', price: 450, startingPrice: 300, increment: 25, endsAt: Date.now() + 9.5 * hour, seller: 'Priya G.', bids: [{ bidder: 'Aman V.', amount: 300, time: Date.now() - 2 * hour }, { bidder: 'Riya S.', amount: 350, time: Date.now() - 1.5 * hour }, { bidder: 'Dev P.', amount: 450, time: Date.now() - 42 * 60 * 1000 }], watched: false, questions: [], status: 'live' },
-  { id: 6, title: 'Moleskine sketchbooks, set of 3', category: 'Books', condition: 'New', description: 'Three A5, 96-page sketchbooks. Bought for a project and never opened. Heavyweight acid-free paper.', image: 'https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=960&q=85', price: 240, startingPrice: 180, increment: 20, endsAt: Date.now() + 15 * hour, seller: 'Kabir N.', bids: [{ bidder: 'Sara L.', amount: 180, time: Date.now() - 45 * 60 * 1000 }, { bidder: 'Mira S.', amount: 220, time: Date.now() - 18 * 60 * 1000 }, { bidder: 'Rohan D.', amount: 240, time: Date.now() - 8 * 60 * 1000 }], watched: false, questions: [], status: 'live' },
-];
-
 const money = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 const timeLeft = (endsAt: number, now: number) => {
   const seconds = Math.max(0, Math.floor((endsAt - now) / 1000));
@@ -35,8 +29,25 @@ const timeLeft = (endsAt: number, now: number) => {
   return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes}m` : `${minutes}m ${remainder.toString().padStart(2, '0')}s`;
 };
 
+const imageAsDataUrl = async (file: File): Promise<string> => {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not process this photo.');
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL('image/jpeg', 0.78);
+};
+
 function App() {
-  const [auctions, setAuctions] = useState(initialAuctions);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [auctionsLoading, setAuctionsLoading] = useState(true);
+  const [auctionsError, setAuctionsError] = useState('');
   const [now, setNow] = useState(Date.now());
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All items');
@@ -55,6 +66,38 @@ function App() {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) return;
+    setAuctionsLoading(true);
+    setAuctionsError('');
+    listAuctions(token)
+      .then((records) => setAuctions(records.map((record) => toAuction(record) as Auction)))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not load campus listings.';
+        setAuctions([]);
+        setAuctionsError(message);
+        showNotice(message);
+      })
+      .finally(() => setAuctionsLoading(false));
+  }, [authUser]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) {
+      setAuthLoading(false);
+      return;
+    }
+    fetchCurrentUser(token)
+      .then(setAuthUser)
+      .catch(() => {
+        localStorage.removeItem('sellgoods.user');
+        localStorage.removeItem('sellgoods.token');
+      })
+      .finally(() => setAuthLoading(false));
   }, []);
 
   useEffect(() => {
@@ -82,14 +125,38 @@ function App() {
 
   const toggleWatch = (id: number) => setAuctions((items) => items.map((item) => item.id === id ? { ...item, watched: !item.watched } : item));
 
-  const setAuctionOutcome = (id: number, status: Auction['status']) => {
+  const setAuctionOutcome = async (id: number, status: Auction['status']) => {
+    if (status === 'cancelled') {
+      const token = localStorage.getItem('sellgoods.token');
+      if (!token) return;
+      try {
+        const updated = await cancelAuctionApi(token, id);
+        setAuctions((items) => items.map((item) => item.id === id ? toAuction(updated) as Auction : item));
+      } catch (error) {
+        return showNotice(error instanceof Error ? error.message : 'Could not cancel this auction.');
+      }
+    }
     setAuctions((items) => items.map((item) => item.id === id ? { ...item, status } : item));
     showNotice(status === 'approved' ? 'Winning bid approved. The item is reserved.' : status === 'sold' ? 'Campus handover confirmed.' : status === 'failed pickup' ? 'Failed pickup recorded.' : status === 'rejected' ? 'Winning price rejected.' : status === 'cancelled' ? 'Listing cancelled.' : 'Auction updated.');
   };
 
-  const updateAuction = (id: number, patch: Partial<Auction>) => {
-    setAuctions((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
-    showNotice('Listing updated.');
+  const updateAuction = async (id: number, patch: Partial<Auction>) => {
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) return;
+    try {
+      const updated = await updateAuctionApi(token, id, {
+        title: patch.title,
+        category: patch.category,
+        condition: patch.condition,
+        description: patch.description,
+        starting_price: patch.startingPrice,
+        increment: patch.increment,
+      });
+      setAuctions((items) => items.map((item) => item.id === id ? toAuction(updated) as Auction : item));
+      showNotice('Listing updated.');
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Could not update this listing.');
+    }
   };
 
   const placeBid = (event: React.FormEvent) => {
@@ -99,7 +166,7 @@ function App() {
     const minimum = selected.bids.length ? selected.price + selected.increment : selected.startingPrice;
     if (selected.endsAt <= Date.now()) return showNotice('This auction has closed.');
     if (amount < minimum) return showNotice(`Enter at least ${money(minimum)}.`);
-    const bid: Bid = { bidder: 'You', amount, time: Date.now() };
+    const bid: Bid = { bidder: authUser?.name ?? 'You', amount, time: Date.now() };
     setAuctions((items) => items.map((item) => {
       if (item.id !== selected.id) return item;
       const extended = item.endsAt - Date.now() <= 30_000;
@@ -109,7 +176,7 @@ function App() {
     showNotice(selected.endsAt - Date.now() <= 30_000 ? 'Bid placed. Auction extended by 60 seconds.' : 'Your bid is on the board.');
   };
 
-  const createListing = (event: React.FormEvent<HTMLFormElement>) => {
+  const createListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const startingPrice = Number(form.get('price'));
@@ -117,16 +184,26 @@ function App() {
     const duration = Number(form.get('duration'));
     const title = String(form.get('title'));
     const imageFile = form.get('image');
-    const newItem: Auction = {
-      id: Date.now(), title, category: String(form.get('category')), condition: String(form.get('condition')),
-      description: String(form.get('description')),
-      image: imageFile instanceof File && imageFile.size ? URL.createObjectURL(imageFile) : 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=960&q=85',
-      price: startingPrice, startingPrice, increment, endsAt: Date.now() + duration * hour,
-      seller: 'You', bids: [], watched: false, questions: [], status: 'live',
-    };
-    setAuctions((items) => [newItem, ...items]);
-    setModal(null);
-    showNotice('Your listing is live.');
+    const image = imageFile instanceof File && imageFile.size ? await imageAsDataUrl(imageFile) : '';
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token || !authUser) return;
+    try {
+      const created = await createAuctionApi(token, {
+        title,
+        category: String(form.get('category')),
+        condition: String(form.get('condition')),
+        description: String(form.get('description')),
+        image,
+        startingPrice,
+        increment,
+        endsAt: Date.now() + duration * hour,
+      });
+      setAuctions((items) => [toAuction(created) as Auction, ...items]);
+      setModal(null);
+      showNotice('Your listing is live for every student.');
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Could not publish your listing.');
+    }
   };
 
   const saveWatch = (event: React.FormEvent<HTMLFormElement>) => {
@@ -144,7 +221,7 @@ function App() {
     const form = new FormData(event.currentTarget);
     const text = String(form.get('question')).trim();
     if (!text) return;
-    setAuctions((items) => items.map((item) => item.id === selected.id ? { ...item, questions: [...item.questions, { author: 'You', text }] } : item));
+    setAuctions((items) => items.map((item) => item.id === selected.id ? { ...item, questions: [...item.questions, { author: authUser?.name ?? 'You', text }] } : item));
     event.currentTarget.reset();
     showNotice('Question sent to the seller.');
   };
@@ -164,6 +241,24 @@ function App() {
     const permission = await Notification.requestPermission();
     showNotice(permission === 'granted' ? 'Browser notifications are on.' : 'Notifications were not enabled.');
   };
+
+  const completeAuthentication = (user: AuthUser, token: string) => {
+    localStorage.setItem('sellgoods.user', JSON.stringify(user));
+    localStorage.setItem('sellgoods.token', token);
+    setAuthUser(user);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('sellgoods.user');
+    localStorage.removeItem('sellgoods.token');
+    setAuthUser(null);
+    setAuctions([]);
+    setActiveTab('Marketplace');
+    showNotice('You have logged out.');
+  };
+
+  if (authLoading) return <div className="auth-loading"><span className="brand-mark"><Tag size={18} /></span><span>Opening your campus exchange…</span></div>;
+  if (!authUser) return <AuthPage onAuthenticated={completeAuthentication} />;
 
   const renderCard = (item: Auction) => (
     <article className="auction-card" key={item.id}>
@@ -192,7 +287,7 @@ function App() {
         <nav className={`main-nav ${mobileMenu ? 'nav-open' : ''}`}>
           {['Marketplace', 'My activity', 'My listings', 'AI assistant'].map((tab) => <button key={tab} onClick={() => { setActiveTab(tab); setMobileMenu(false); }} className={activeTab === tab ? 'active' : ''}>{tab === 'AI assistant' && <Sparkles size={15} />}{tab}</button>)}
         </nav>
-        <div className="header-actions"><button className="icon-button notification-button" onClick={enableNotifications} title="Enable browser notifications"><Bell size={18} /><span /></button><button className="avatar-button" title="Your profile">A</button><button className="icon-button menu-button" onClick={() => setMobileMenu((open) => !open)} aria-label="Toggle navigation">{mobileMenu ? <X size={20} /> : <Menu size={20} />}</button></div>
+        <div className="header-actions"><button className="icon-button notification-button" onClick={enableNotifications} title="Enable browser notifications"><Bell size={18} /><span /></button><span className="account-name">{authUser.name}</span><button className="logout-button" onClick={logout}><LogOut size={15} /> Log out</button><button className="icon-button menu-button" onClick={() => setMobileMenu((open) => !open)} aria-label="Toggle navigation">{mobileMenu ? <X size={20} /> : <Menu size={20} />}</button></div>
       </header>
 
       {activeTab === 'Marketplace' && <main id="home">
@@ -208,7 +303,7 @@ function App() {
           <div className="section-heading"><div><div className="eyebrow dark-eyebrow"><span /> THE CAMPUS EXCHANGE</div><h2>Find your next <span>something.</span></h2></div><div className="section-side"><span className="live-indicator" /><span>{visibleAuctions.length} live listings</span><button className="button-outline" onClick={() => setModal('listing')}><Plus size={16} /> List an item</button></div></div>
           <div className="market-tools"><div className="search-box"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cycles, calculators, that one textbook..." aria-label="Search listings" /><kbd>⌘ K</kbd></div><div className="filter-controls"><label className="select-wrap"><Filter size={15} /><select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filter category"><option>All items</option><option>Cycles</option><option>Electronics</option><option>Books</option><option>Other</option></select><ChevronDown size={14} /></label><label className="select-wrap"><select value={condition} onChange={(event) => setCondition(event.target.value)} aria-label="Filter condition"><option>Any condition</option><option>New</option><option>Like new</option><option>Very good</option><option>Good</option></select><ChevronDown size={14} /></label><label className="price-filter"><span>₹</span><input type="number" min="0" placeholder="Max price" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} aria-label="Maximum price" /></label><label className="select-wrap sort-select"><ArrowDownUp size={15} /><select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort listings"><option>Ending soon</option><option>Price: low to high</option></select><ChevronDown size={14} /></label></div></div>
           <div className="category-rail">{[{ name: 'Everything', icon: <Tag size={15} />, value: 'All items' }, { name: 'Cycles', icon: <Bike size={15} />, value: 'Cycles' }, { name: 'Tech & electronics', icon: <Laptop size={15} />, value: 'Electronics' }, { name: 'Books & notes', icon: <BookOpen size={15} />, value: 'Books' }, { name: 'The rest', icon: <Sparkles size={15} />, value: 'Other' }].map((item) => <button key={item.value} className={category === item.value ? 'category-active' : ''} onClick={() => setCategory(item.value)}>{item.icon}{item.name}</button>)}<button className="want-button" onClick={() => setModal('watch')}><Bell size={15} /> Want something specific?</button></div>
-          {visibleAuctions.length ? <div className="auction-grid">{visibleAuctions.map(renderCard)}</div> : <div className="empty-state"><Search size={24} /><h3>Nothing on the board yet.</h3><p>Try a different search or save what you're looking for.</p><button className="button-outline" onClick={() => { setQuery(''); setCategory('All items'); setCondition('Any condition'); setMaxPrice(''); }}>Clear filters</button></div>}
+          {auctionsLoading ? <div className="empty-state"><Clock3 size={24} /><h3>Loading campus listings…</h3></div> : auctionsError ? <div className="empty-state"><Search size={24} /><h3>Couldn’t load the campus exchange.</h3><p>{auctionsError}</p><button className="button-outline" onClick={() => { const token = localStorage.getItem('sellgoods.token'); if (!token) return; setAuctionsLoading(true); setAuctionsError(''); listAuctions(token).then((records) => setAuctions(records.map((record) => toAuction(record) as Auction))).catch((error: unknown) => setAuctionsError(error instanceof Error ? error.message : 'Could not load campus listings.')).finally(() => setAuctionsLoading(false)); }}>Try again</button></div> : visibleAuctions.length ? <div className="auction-grid">{visibleAuctions.map(renderCard)}</div> : <div className="empty-state"><Search size={24} /><h3>Nothing on the board yet.</h3><p>Try a different search or be the first to list something.</p><button className="button-outline" onClick={() => setModal('listing')}><Plus size={15} /> List an item</button></div>}
           <div className="more-row"><span>GOOD FINDS DON'T HAPPEN ALL AT ONCE.</span><button onClick={() => setModal('watch')}>Get notified when something's listed <ArrowRight size={15} /></button></div>
         </section>
 
@@ -219,7 +314,7 @@ function App() {
 
       {activeTab === 'My activity' && <main className="activity-page"><div className="eyebrow dark-eyebrow"><span /> YOUR CAMPUS EXCHANGE</div><div className="section-heading"><div><h1>Your <span>activity.</span></h1><p className="activity-intro">Keep an eye on the things you care about.</p></div><button className="button-outline" onClick={enableNotifications}><Bell size={16} /> Turn on alerts</button></div><div className="activity-columns"><section><div className="activity-heading"><h2><Heart size={18} /> Saved auctions</h2><span>{auctions.filter((item) => item.watched).length}</span></div>{auctions.filter((item) => item.watched).length ? <div className="activity-list">{auctions.filter((item) => item.watched).map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)}><img src={item.image} alt="" /><span><strong>{item.title}</strong><small>{item.status === 'live' ? `Closes in ${timeLeft(item.endsAt, now)}` : 'Auction closed'}</small></span><b>{money(item.price)}</b><ChevronRight size={17} /></button>)}</div> : <p className="activity-empty">Save an auction with the heart and it will show up here.</p>}</section><section><div className="activity-heading"><h2><Bell size={18} /> Search alerts</h2><button className="small-add" onClick={() => setModal('watch')}><Plus size={15} /> New alert</button></div><div className="alert-placeholder"><span><Search size={20} /></span><strong>Don't miss the right listing.</strong><p>Set a search alert and we'll let you know when something matching turns up.</p><button className="text-link" onClick={() => setModal('watch')}>Create a search alert <ArrowRight size={14} /></button></div></section></div></main>}
 
-      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.seller === 'You')} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} />}
+      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.seller === authUser.name)} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} />}
 
       <footer className="site-footer"><a className="brand footer-brand" href="#home"><span className="brand-mark"><Tag size={16} strokeWidth={2.5} /></span><span>sellgoods<span className="brand-period">.</span></span></a><span>Good things find their next person.</span><div><button onClick={() => showNotice('All bids and bidder names are public on each auction.')}>The ground rules</button><i /> <button onClick={() => showNotice('Made for campus, by campus.')}>About</button></div><span className="footer-year">CAMPUS, IN CIRCULATION © 2026</span></footer>
 

@@ -1,3 +1,7 @@
 node_modules/
 dist/
 *.tsbuildinfo
+backend/.env
+__pycache__/
+*.py[cod]
+*.db
