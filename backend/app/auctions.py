@@ -72,6 +72,19 @@ def list_auctions(
     return [serialize_auction(auction, database) for auction in auctions]
 
 
+@router.get("/mine", response_model=list[AuctionResponse])
+def list_my_auctions(
+    database: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[AuctionResponse]:
+    auctions = database.scalars(
+        select(Auction)
+        .where(Auction.seller_id == current_user.id)
+        .order_by(Auction.created_at.desc())
+    ).all()
+    return [serialize_auction(auction, database) for auction in auctions]
+
+
 @router.post("", response_model=AuctionResponse, status_code=status.HTTP_201_CREATED)
 def create_auction(
     payload: AuctionCreate,

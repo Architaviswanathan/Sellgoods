@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -19,3 +20,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+database_url = make_url(settings.database_url)
+if database_url.drivername.startswith("sqlite") and database_url.database and not Path(database_url.database).is_absolute():
+    repository_root = Path(__file__).resolve().parents[2]
+    database_path = (repository_root / database_url.database).resolve()
+    settings.database_url = database_url.set(database=str(database_path)).render_as_string(hide_password=False)

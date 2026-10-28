@@ -121,6 +121,11 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual(marketplace.json()[0]["seller"], "Senior Student")
         self.assertEqual(marketplace.json()[0]["price"], 250)
 
+        seller_items = self.client.get("/api/auctions/mine", headers={"Authorization": f"Bearer {seller_token}"})
+        buyer_items = self.client.get("/api/auctions/mine", headers={"Authorization": f"Bearer {buyer_token}"})
+        self.assertEqual([item["title"] for item in seller_items.json()], ["Engineering textbooks"])
+        self.assertEqual(buyer_items.json(), [])
+
     def test_seller_can_see_persistent_bidder_and_leading_amount(self) -> None:
         seller_response = self.client.post(
             "/api/auth/signup",
@@ -221,6 +226,12 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual(question.status_code, 201)
         question_id = question.json()["id"]
 
+        owner_listings_before_answer = self.client.get("/api/auctions/mine", headers=seller_headers).json()
+        self.assertEqual(len(owner_listings_before_answer), 1)
+        self.assertEqual(owner_listings_before_answer[0]["questions"][0]["text"], "Are both brakes working?")
+        buyer_owned_listings = self.client.get("/api/auctions/mine", headers=buyer_headers).json()
+        self.assertEqual(buyer_owned_listings, [])
+
         seller_question = self.client.patch(
             f"/api/auctions/{auction['id']}/questions/{question_id}",
             headers=seller_headers,
@@ -246,6 +257,8 @@ class AuthenticationTests(unittest.TestCase):
 
         shared_auction = self.client.get("/api/auctions", headers=buyer_headers).json()[0]
         self.assertEqual(shared_auction["questions"][0]["answer"], "Yes, the brakes were checked this week.")
+        owner_listings = self.client.get("/api/auctions/mine", headers=seller_headers).json()
+        self.assertEqual(owner_listings[0]["questions"][0]["text"], "Are both brakes working?")
 
     def test_seller_cannot_bid_on_own_auction(self) -> None:
         seller = self.client.post(

@@ -35,10 +35,11 @@ Run the auth tests from the repository root with `python -m unittest discover -s
 - Seller inbox alerts persist for new bids and buyer questions. The bell refreshes in the background while signed in, and optional browser pop-ups work when the tab is backgrounded.
 - Item-specific buyer questions, saved auctions, browser notification permission, and a natural-language search assistant.
 - Seller workspace to edit or cancel listings, approve or reject a winning price, and record confirmed or failed pickup outcomes.
+- **My listings** loads from the seller-only `/api/auctions/mine` endpoint and displays the signed-in email to clarify which account owns the visible items.
 - Automatic bid limit controls and search alerts are represented in the interface.
 
 ## Demo limitations
 
-Authentication, listings, bids, questions, answers, and activity notifications are stored by the backend and shared between authenticated users. Automatic bidding and saved-search alerts are UI demonstrations, not persistent services. Listing photos are resized in the browser and stored in the listing record. Do not use this prototype for real transactions.
+Authentication, listings, bids, questions, answers, and activity notifications are stored by the backend and shared between authenticated users. **My listings** only shows items belonging to the currently signed-in account; sign in using the same email that created a listing to manage it. Automatic bidding and saved-search alerts are UI demonstrations, not persistent services. Listing photos are resized in the browser and stored in the listing record. Do not use this prototype for real transactions.
 
 Database tables are created at API startup for local development. Before a real launch, add formal schema migrations, email verification and account recovery, secure production secret management, and fully persisted seller outcome/handover workflows. Use HTTPS and a secure token storage strategy in production.

@@ -20,6 +20,8 @@ type SellerItem = {
 
 type SellerDashboardProps = {
   items: SellerItem[];
+  sellerName: string;
+  sellerEmail: string;
   now: number;
   onUpdate: (id: number, patch: Pick<Partial<SellerItem>, 'title' | 'category' | 'condition' | 'description' | 'startingPrice' | 'price' | 'increment'>) => void;
   onOutcome: (id: number, status: SellerItem['status']) => void;
@@ -34,7 +36,7 @@ const remaining = (endsAt: number, now: number) => {
   return hours ? `${hours}h ${minutes}m` : `${minutes}m ${seconds % 60}s`;
 };
 
-export default function SellerDashboard({ items, now, onUpdate, onOutcome, onAnswer }: SellerDashboardProps) {
+export default function SellerDashboard({ items, sellerName, sellerEmail, now, onUpdate, onOutcome, onAnswer }: SellerDashboardProps) {
   const [editing, setEditing] = useState<SellerItem | null>(null);
 
   const saveEdit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -57,7 +59,7 @@ export default function SellerDashboard({ items, now, onUpdate, onOutcome, onAns
     <main className="activity-page seller-page">
       <div className="eyebrow dark-eyebrow"><span /> SELLER WORKSPACE</div>
       <div className="section-heading seller-heading">
-        <div><h1>Your <span>listings.</span></h1><p className="activity-intro">Manage live auctions and record what happens after they close.</p></div>
+        <div><h1>Your <span>listings.</span></h1><p className="activity-intro">Signed in as {sellerEmail}. Only listings created by this account appear here.</p></div>
         <span className="seller-count">{items.length} {items.length === 1 ? 'listing' : 'listings'}</span>
       </div>
       {items.length ? <div className="seller-list">
@@ -85,7 +87,7 @@ export default function SellerDashboard({ items, now, onUpdate, onOutcome, onAns
             {item.status === 'unsold' && <div className="seller-outcome"><span className="outcome-winner">No bids · marked unsold</span></div>}
           </div>
         </article>)}
-      </div> : <div className="empty-state seller-empty"><ShieldCheck size={24} /><h3>Your listings will appear here.</h3><p>List an item from the marketplace to manage its auction and handover.</p></div>}
+      </div> : <div className="empty-state seller-empty"><ShieldCheck size={24} /><h3>No listings under {sellerName}.</h3><p>Listings are tied to the account that created them. Switch to that account to manage its items, or list a new one here.</p></div>}
   {editing && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}><section className="form-modal" role="dialog" aria-modal="true" aria-label="Edit listing"><div className="form-modal-heading"><div><div className="eyebrow dark-eyebrow"><span /> UPDATE YOUR ITEM</div><h2>Edit listing.</h2></div><button className="modal-close" onClick={() => setEditing(null)} aria-label="Close"><X size={19} /></button></div><form onSubmit={saveEdit}><label>ITEM NAME<input name="title" defaultValue={editing.title} required maxLength={80} /></label><div className="form-row"><label>CATEGORY<select name="category" defaultValue={editing.category}><option>Cycles</option><option>Electronics</option><option>Books</option><option>Other</option></select></label><label>CONDITION<select name="condition" defaultValue={editing.condition}><option>Good</option><option>Like new</option><option>Very good</option><option>New</option></select></label></div><label>THE DETAILS<textarea name="description" defaultValue={editing.description} required rows={3} maxLength={500} /></label><div className="form-row"><label>STARTING PRICE (₹)<input name="price" type="number" min="1" defaultValue={editing.startingPrice} required /></label><label>MINIMUM INCREMENT (₹)<input name="increment" type="number" min="1" defaultValue={editing.increment} required /></label></div><div className="form-modal-footer"><span><ShieldCheck size={16} /> Editing closes after a bid.</span><button className="button-dark" type="submit">Save changes <ArrowRight size={15} /></button></div></form></section></div>}
   </main>
   );

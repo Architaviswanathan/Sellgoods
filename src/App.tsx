@@ -7,7 +7,7 @@ import {
 import SellerDashboard from './SellerDashboard';
 import AuthPage from './AuthPage';
 import { fetchCurrentUser, type AuthUser } from './auth';
-import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, placeBid as placeBidApi, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
+import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, listMyAuctions, placeBid as placeBidApi, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
 import { answerAuctionQuestion, askAuctionQuestion, listNotifications, markAllNotificationsRead, markNotificationRead, type CampusNotification } from './activityApi';
 import NotificationPanel from './NotificationPanel';
 
@@ -48,6 +48,7 @@ function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [myAuctions, setMyAuctions] = useState<Auction[]>([]);
   const [auctionsLoading, setAuctionsLoading] = useState(true);
   const [auctionsError, setAuctionsError] = useState('');
   const [now, setNow] = useState(Date.now());
@@ -83,9 +84,10 @@ function App() {
     let hasLoaded = false;
     const refresh = async () => {
       try {
-        const [records, alertRecords] = await Promise.all([listAuctions(token), listNotifications(token)]);
+        const [records, ownRecords, alertRecords] = await Promise.all([listAuctions(token), listMyAuctions(token), listNotifications(token)]);
         if (!active) return;
         setAuctions(records.map((record) => toAuction(record) as Auction));
+        setMyAuctions(ownRecords.map((record) => toAuction(record) as Auction));
         setNotifications(alertRecords);
         if (hasLoaded && document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted') {
           const newAlerts = alertRecords.filter((alert) => !alert.read_at && !seenNotificationIds.current.has(alert.id));
@@ -161,6 +163,7 @@ function App() {
       try {
         const updated = await cancelAuctionApi(token, id);
         setAuctions((items) => items.map((item) => item.id === id ? toAuction(updated) as Auction : item));
+        setMyAuctions((items) => items.map((item) => item.id === id ? toAuction(updated) as Auction : item));
       } catch (error) {
         return showNotice(error instanceof Error ? error.message : 'Could not cancel this auction.');
       }
@@ -182,6 +185,7 @@ function App() {
         increment: patch.increment,
       });
       setAuctions((items) => items.map((item) => item.id === id ? toAuction(updated) as Auction : item));
+      setMyAuctions((items) => items.map((item) => item.id === id ? toAuction(updated) as Auction : item));
       showNotice('Listing updated.');
     } catch (error) {
       showNotice(error instanceof Error ? error.message : 'Could not update this listing.');
@@ -227,6 +231,7 @@ function App() {
         endsAt: Date.now() + duration * hour,
       });
       setAuctions((items) => [toAuction(created) as Auction, ...items]);
+      setMyAuctions((items) => [toAuction(created) as Auction, ...items]);
       setModal(null);
       showNotice('Your listing is live for every student.');
     } catch (error) {
@@ -269,8 +274,9 @@ function App() {
     if (!token) return;
     try {
       await answerAuctionQuestion(token, auctionId, questionId, answer);
-      const records = await listAuctions(token);
+      const [records, ownRecords] = await Promise.all([listAuctions(token), listMyAuctions(token)]);
       setAuctions(records.map((record) => toAuction(record) as Auction));
+      setMyAuctions(ownRecords.map((record) => toAuction(record) as Auction));
       showNotice('Your answer is visible to the buyer.');
     } catch (error) {
       showNotice(error instanceof Error ? error.message : 'Could not send your answer.');
@@ -287,8 +293,11 @@ function App() {
         showNotice(error instanceof Error ? error.message : 'Could not update notification.');
       }
     }
-    const auctionRecords = token ? await listAuctions(token).catch(() => []) : [];
-    if (auctionRecords.length) setAuctions(auctionRecords.map((record) => toAuction(record) as Auction));
+    const [auctionRecords, ownRecords] = token
+      ? await Promise.all([listAuctions(token).catch(() => []), listMyAuctions(token).catch(() => [])])
+      : [[], []];
+    setAuctions(auctionRecords.map((record) => toAuction(record) as Auction));
+    setMyAuctions(ownRecords.map((record) => toAuction(record) as Auction));
     setSelectedId(notification.auction_id);
     setActiveTab('Marketplace');
     setNotificationsOpen(false);
@@ -333,6 +342,7 @@ function App() {
     localStorage.removeItem('sellgoods.token');
     setAuthUser(null);
     setAuctions([]);
+    setMyAuctions([]);
     setNotifications([]);
     setNotificationsOpen(false);
     seenNotificationIds.current.clear();
@@ -397,15 +407,112 @@ function App() {
 
       {activeTab === 'My activity' && <main className="activity-page"><div className="eyebrow dark-eyebrow"><span /> YOUR CAMPUS EXCHANGE</div><div className="section-heading"><div><h1>Your <span>activity.</span></h1><p className="activity-intro">Keep an eye on the things you care about.</p></div><button className="button-outline" onClick={enableNotifications}><Bell size={16} /> Turn on alerts</button></div><div className="activity-columns"><section><div className="activity-heading"><h2><Heart size={18} /> Saved auctions</h2><span>{auctions.filter((item) => item.watched).length}</span></div>{auctions.filter((item) => item.watched).length ? <div className="activity-list">{auctions.filter((item) => item.watched).map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)}><img src={item.image} alt="" /><span><strong>{item.title}</strong><small>{item.status === 'live' ? `Closes in ${timeLeft(item.endsAt, now)}` : 'Auction closed'}</small></span><b>{money(item.price)}</b><ChevronRight size={17} /></button>)}</div> : <p className="activity-empty">Save an auction with the heart and it will show up here.</p>}</section><section><div className="activity-heading"><h2><Bell size={18} /> Search alerts</h2><button className="small-add" onClick={() => setModal('watch')}><Plus size={15} /> New alert</button></div><div className="alert-placeholder"><span><Search size={20} /></span><strong>Don't miss the right listing.</strong><p>Set a search alert and we'll let you know when something matching turns up.</p><button className="text-link" onClick={() => setModal('watch')}>Create a search alert <ArrowRight size={14} /></button></div></section></div></main>}
 
-      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.sellerId === authUser.id)} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} onAnswer={answerQuestion} />}
+      {activeTab === 'My listings' && <SellerDashboard items={myAuctions} sellerName={authUser.name} sellerEmail={authUser.email} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} onAnswer={answerQuestion} />}
 
       <footer className="site-footer"><a className="brand footer-brand" href="#home"><span className="brand-mark"><Tag size={16} strokeWidth={2.5} /></span><span>sellgoods<span className="brand-period">.</span></span></a><span>Good things find their next person.</span><div><button onClick={() => showNotice('All bids and bidder names are public on each auction.')}>The ground rules</button><i /> <button onClick={() => showNotice('Made for campus, by campus.')}>About</button></div><span className="footer-year">CAMPUS, IN CIRCULATION © 2026</span></footer>
 
-      {selected && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}><section className="detail-modal" role="dialog" aria-modal="true" aria-label={selected.title}><button className="modal-close" onClick={() => setSelectedId(null)} aria-label="Close"><X size={19} /></button><div className="detail-image"><img src={selected.image} alt={selected.title} /><span className="condition-chip">{selected.condition}</span></div><div className="detail-body"><div className="detail-meta"><span>{selected.category}</span><span>·</span><span>Listed by {selected.seller}</span></div><h2>{selected.title}</h2><p className="detail-description">{selected.description}</p><div className="detail-price"><div><span className="price-label">{selected.bids.length ? 'CURRENT LEADING BID' : 'STARTING PRICE'}</span><strong>{money(selected.price)}</strong></div><div className="detail-countdown"><Clock3 size={16} /><span>{selected.status === 'live' ? timeLeft(selected.endsAt, now) : 'Auction closed'}</span></div></div><div className="bid-rules">Minimum next bid <strong>{money(selected.bids.length ? selected.price + selected.increment : selected.startingPrice)}</strong><span> · </span>increments of {money(selected.increment)}</div>{selected.status === 'live' && <form className="bid-form" onSubmit={placeBid}><label htmlFor="bid-amount">YOUR BID</label><div><span>₹</span><input id="bid-amount" type="number" min={selected.bids.length ? selected.price + selected.increment : selected.startingPrice} step="any" required placeholder={String(selected.bids.length ? selected.price + selected.increment : selected.startingPrice)} value={bidValue} onChange={(event) => setBidValue(event.target.value)} /><button className="button-dark" type="submit">Place bid <ArrowRight size={15} /></button></div></form>}<details className="auto-bid"><summary><Sparkles size={15} /> Set an automatic bid limit <ChevronDown size={15} /></summary><form onSubmit={(event) => { event.preventDefault(); const amount = Number(autoMax); if (amount <= selected.price) return showNotice('Your maximum must be higher than the current bid.'); showNotice(`Auto-bid enabled up to ${money(amount)}. Demo mode only.`); setAutoMax(''); }}><input type="number" min={selected.price + selected.increment} step="any" placeholder={`Maximum e.g. ${selected.price + 500}`} value={autoMax} onChange={(event) => setAutoMax(event.target.value)} required /><button type="submit">Set limit</button></form><p>We'll bid only what's needed to keep you in the lead, never beyond your limit.</p></details><div className="bid-history"><div className="subheading-row"><h3>Public bid history <span>{selected.bids.length}</span></h3><span>All bids visible</span></div>{selected.bids.length ? [...selected.bids].reverse().map((bid, index) => <div className={`bid-entry ${index === 0 ? 'leading-bid' : ''}`} key={`${bid.time}-${bid.bidder}`}><span className="bid-avatar">{bid.bidder.slice(0, 1)}</span><span className="bidder-name">{bid.bidder}{index === 0 && <small>LEADING</small>}</span><span className="bid-time">{new Date(bid.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{money(bid.amount)}</strong></div>) : <p className="no-bids">No bids yet. Set the opening price.</p>}</div><div className="questions-block"><div className="subheading-row"><h3><MessageCircle size={16} /> Questions <span>{selected.questions.length}</span></h3><span>Keep it useful</span></div>{selected.questions.map((question, index) => <div className="question-entry" key={`${question.text}-${index}`}><strong>{question.author}</strong><p>{question.text}</p>{question.answer && <div className="seller-answer"><span>SELLER</span>{question.answer}</div>}</div>)}<form className="question-form" onSubmit={sendQuestion}><input name="question" placeholder="Ask the seller something specific..." maxLength={240} required /><button aria-label="Send question"><Send size={16} /></button></form></div></div></section></div>}
+      {selected && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}><section className={selected.sellerId === authUser.id ? 'detail-modal seller-detail-modal' : 'detail-modal'} role="dialog" aria-modal="true" aria-label={selected.title}>
+        <button className="modal-close" onClick={() => setSelectedId(null)} aria-label="Close"><X size={19} /></button>
+        <div className="detail-image"><img src={selected.image} alt={selected.title} /><span className="condition-chip">{selected.condition}</span></div>
+        <div className="detail-body">
+          <div className="detail-meta"><span>{selected.category}</span><span>·</span><span>Listed by {selected.seller}</span></div>
+          <h2>{selected.title}</h2>
+          <p className="detail-description">{selected.description}</p>
+          <div className="detail-price">
+            <div><span className="price-label">{selected.bids.length ? 'CURRENT LEADING BID' : 'STARTING PRICE'}</span><strong>{money(selected.price)}</strong></div>
+            <div className="detail-countdown"><Clock3 size={16} /><span>{selected.status === 'live' ? timeLeft(selected.endsAt, now) : 'Auction closed'}</span></div>
+          </div>
+          <div className="bid-rules">Minimum next bid <strong>{money(selected.bids.length ? selected.price + selected.increment : selected.startingPrice)}</strong><span> · </span>increments of {money(selected.increment)}</div>
+          {selected.sellerId === authUser.id && <p className="seller-own-item-note">This is your listing. Other students can bid; manage buyer questions from My listings.</p>}
+          {selected.status === 'live' && selected.sellerId !== authUser.id && <form className="bid-form" onSubmit={placeBid}>
+            <label htmlFor="bid-amount">YOUR BID</label>
+            <div>
+              <span>₹</span>
+              <input id="bid-amount" type="number" min={selected.bids.length ? selected.price + selected.increment : selected.startingPrice} step="any" required placeholder={String(selected.bids.length ? selected.price + selected.increment : selected.startingPrice)} value={bidValue} onChange={(event) => setBidValue(event.target.value)} />
+              <button className="button-dark" type="submit">Place bid <ArrowRight size={15} /></button>
+            </div>
+          </form>}
+          {selected.sellerId !== authUser.id && <details className="auto-bid"><summary><Sparkles size={15} /> Set an automatic bid limit <ChevronDown size={15} /></summary>
+            <form onSubmit={(event) => { event.preventDefault(); const amount = Number(autoMax); if (amount <= selected.price) return showNotice('Your maximum must be higher than the current bid.'); showNotice(`Auto-bid enabled up to ${money(amount)}. Demo mode only.`); setAutoMax(''); }}>
+              <input type="number" min={selected.price + selected.increment} step="any" placeholder={`Maximum e.g. ${selected.price + 500}`} value={autoMax} onChange={(event) => setAutoMax(event.target.value)} required />
+              <button type="submit">Set limit</button>
+            </form>
+            <p>We'll bid only what's needed to keep you in the lead, never beyond your limit.</p>
+          </details>}
+          <div className="bid-history">
+            <div className="subheading-row"><h3>Public bid history <span>{selected.bids.length}</span></h3><span>All bids visible</span></div>
+            {selected.bids.length ? [...selected.bids].reverse().map((bid, index) => <div className={`bid-entry ${index === 0 ? 'leading-bid' : ''}`} key={`${bid.time}-${bid.bidder}`}>
+              <span className="bid-avatar">{bid.bidder.slice(0, 1)}</span>
+              <span className="bidder-name">{bid.bidder}{index === 0 && <small>LEADING</small>}</span>
+              <span className="bid-time">{new Date(bid.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              <strong>{money(bid.amount)}</strong>
+            </div>) : <p className="no-bids">No bids yet. Set the opening price.</p>}
+          </div>
+          <div className="questions-block">
+            <div className="subheading-row"><h3><MessageCircle size={16} /> Questions <span>{selected.questions.length}</span></h3><span>Keep it useful</span></div>
+            {selected.questions.map((question, index) => <div className="question-entry" key={`${question.text}-${index}`}>
+              <strong>{question.author}</strong>
+              <p>{question.text}</p>
+              {question.answer && <div className="seller-answer"><span>SELLER</span>{question.answer}</div>}
+            </div>)}<form className="question-form" onSubmit={sendQuestion}>
+              <input name="question" placeholder="Ask the seller something specific..." maxLength={240} required />
+              <button aria-label="Send question"><Send size={16} /></button>
+            </form></div></div></section></div>}
 
-      {modal === 'listing' && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}><section className="form-modal" role="dialog" aria-modal="true" aria-label="List an item"><div className="form-modal-heading"><div><div className="eyebrow dark-eyebrow"><span /> PASS IT ON</div><h2>List something <span>good.</span></h2></div><button className="modal-close" onClick={() => setModal(null)} aria-label="Close"><X size={19} /></button></div><form onSubmit={createListing}><label>ITEM NAME<input name="title" placeholder="e.g. Riverside city bicycle" required maxLength={80} /></label><div className="form-row"><label>CATEGORY<select name="category"><option>Cycles</option><option>Electronics</option><option>Books</option><option>Other</option></select></label><label>CONDITION<select name="condition"><option>Good</option><option>Like new</option><option>Very good</option><option>New</option></select></label></div><label>THE DETAILS<textarea name="description" placeholder="What should the next owner know?" required rows={3} maxLength={500} /></label><div className="form-row"><label>STARTING PRICE (₹)<input name="price" type="number" min="1" placeholder="500" required /></label><label>MINIMUM INCREMENT (₹)<input name="increment" type="number" min="1" placeholder="25" required /></label></div><div className="form-row"><label>AUCTION CLOSES IN<select name="duration" defaultValue="24"><option value="1">1 hour</option><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">24 hours</option><option value="48">2 days</option><option value="72">3 days</option></select></label><label>PHOTO<input name="image" type="file" accept="image/*" /><span className="field-note">Choose one photo from this device.</span></label></div><div className="form-modal-footer"><span><ShieldCheck size={16} /> Every bid will be public.</span><button className="button-dark" type="submit">Publish listing <ArrowRight size={15} /></button></div></form></section></div>}
+      {modal === 'listing' && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}><section className="form-modal" role="dialog" aria-modal="true" aria-label="List an item">
+        <div className="form-modal-heading"><div><div className="eyebrow dark-eyebrow"><span /> PASS IT ON</div><h2>List something <span>good.</span></h2></div>
+        <button className="modal-close" onClick={() => setModal(null)} aria-label="Close"><X size={19} /></button></div>
+        <form onSubmit={createListing}>
+          <label>ITEM NAME<input name="title" placeholder="e.g. Riverside city bicycle" required maxLength={80} /></label>
+          <div className="form-row">
+            <label>CATEGORY<select name="category">
+              <option>Cycles</option>
+              <option>Electronics</option>
+              <option>Books</option>
+              <option>Other</option>
+            </select></label>
+            <label>CONDITION<select name="condition">
+              <option>Good</option>
+              <option>Like new</option>
+              <option>Very good</option>
+              <option>New</option>
+            </select></label>
+          </div>
+          <label>THE DETAILS<textarea name="description" placeholder="What should the next owner know?" required rows={3} maxLength={500} /></label>
+          <div className="form-row">
+            <label>STARTING PRICE (₹)<input name="price" type="number" min="1" placeholder="500" required /></label>
+            <label>MINIMUM INCREMENT (₹)<input name="increment" type="number" min="1" placeholder="25" required /></label>
+          </div>
+          <div className="form-row">
+            <label>AUCTION CLOSES IN<select name="duration" defaultValue="24">
+              <option value="1">1 hour</option>
+              <option value="6">6 hours</option>
+              <option value="12">12 hours</option>
+              <option value="24">24 hours</option>
+              <option value="48">2 days</option>
+              <option value="72">3 days</option>
+            </select></label>
+            <label>PHOTO<input name="image" type="file" accept="image/*" /><span className="field-note">Choose one photo from this device.</span></label>
+          </div>
+          <div className="form-modal-footer">
+            <span><ShieldCheck size={16} /> Every bid will be public.</span>
+            <button className="button-dark" type="submit">Publish listing <ArrowRight size={15} /></button>
+          </div>
+        </form></section></div>}
 
-      {modal === 'watch' && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}><section className="watch-modal" role="dialog" aria-modal="true" aria-label="Create a search alert"><button className="modal-close" onClick={() => setModal(null)} aria-label="Close"><X size={19} /></button><span className="watch-icon"><Bell size={21} /></span><div className="eyebrow dark-eyebrow"><span /> SAVE YOUR SEARCH</div><h2>We'll keep an <span>eye out.</span></h2><p>Tell us what you need. We'll let you know when a matching auction appears.</p><form onSubmit={saveWatch}><label>WHAT ARE YOU LOOKING FOR?<input name="phrase" placeholder="e.g. scientific calculator" required /></label><label>MAXIMUM PRICE (₹)<input name="limit" type="number" min="1" placeholder="400" required /></label><button className="button-dark" type="submit">Create alert <ArrowRight size={15} /></button></form><div className="watch-footnote"><Bell size={14} /> Browser pop-ups can be enabled from the bell in the header.</div></section></div>}
+      {modal === 'watch' && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}><section className="watch-modal" role="dialog" aria-modal="true" aria-label="Create a search alert">
+        <button className="modal-close" onClick={() => setModal(null)} aria-label="Close"><X size={19} /></button>
+        <span className="watch-icon"><Bell size={21} /></span>
+        <div className="eyebrow dark-eyebrow"><span /> SAVE YOUR SEARCH</div>
+        <h2>We'll keep an <span>eye out.</span></h2>
+        <p>Tell us what you need. We'll let you know when a matching auction appears.</p>
+        <form onSubmit={saveWatch}>
+          <label>WHAT ARE YOU LOOKING FOR?<input name="phrase" placeholder="e.g. scientific calculator" required /></label>
+          <label>MAXIMUM PRICE (₹)<input name="limit" type="number" min="1" placeholder="400" required /></label>
+          <button className="button-dark" type="submit">Create alert <ArrowRight size={15} /></button>
+        </form>
+        <div className="watch-footnote"><Bell size={14} /> Browser pop-ups can be enabled from the bell in the header.</div>
+      </section></div>}
 
       {notice && <div className="toast"><Check size={17} />{notice}<button onClick={() => setNotice('')} aria-label="Dismiss"><X size={15} /></button></div>}
       <button className="floating-help" onClick={() => showNotice('Questions are public, item-specific, and meant to help buyers decide.') } aria-label="Help"><HelpCircle size={20} /></button>

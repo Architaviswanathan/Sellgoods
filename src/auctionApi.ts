@@ -37,6 +37,10 @@ export function listAuctions(token: string): Promise<AuctionRecord[]> {
   return request('/api/auctions', token);
 }
 
+export function listMyAuctions(token: string): Promise<AuctionRecord[]> {
+  return request('/api/auctions/mine', token);
+}
+
 export function createAuction(token: string, item: {
   title: string; category: string; condition: string; description: string; image: string;
   startingPrice: number; increment: number; endsAt: number;
