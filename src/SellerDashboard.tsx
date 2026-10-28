@@ -14,14 +14,16 @@ type SellerItem = {
   increment: number;
   endsAt: number;
   bids: { bidderId: number; bidder: string; amount: number; time: number }[];
+  questions: { id: number; askerId: number; author: string; text: string; answer?: string }[];
   status: 'live' | 'closed' | 'unsold' | 'approved' | 'rejected' | 'cancelled' | 'sold' | 'failed pickup';
 };
 
 type SellerDashboardProps = {
   items: SellerItem[];
   now: number;
-  onUpdate: (id: number, patch: Partial<SellerItem>) => void;
+  onUpdate: (id: number, patch: Pick<Partial<SellerItem>, 'title' | 'category' | 'condition' | 'description' | 'startingPrice' | 'price' | 'increment'>) => void;
   onOutcome: (id: number, status: SellerItem['status']) => void;
+  onAnswer: (auctionId: number, questionId: number, answer: string) => Promise<void>;
 };
 
 const money = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
@@ -32,7 +34,7 @@ const remaining = (endsAt: number, now: number) => {
   return hours ? `${hours}h ${minutes}m` : `${minutes}m ${seconds % 60}s`;
 };
 
-export default function SellerDashboard({ items, now, onUpdate, onOutcome }: SellerDashboardProps) {
+export default function SellerDashboard({ items, now, onUpdate, onOutcome, onAnswer }: SellerDashboardProps) {
   const [editing, setEditing] = useState<SellerItem | null>(null);
 
   const saveEdit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -68,6 +70,7 @@ export default function SellerDashboard({ items, now, onUpdate, onOutcome }: Sel
             <div className="seller-item-stats"><strong>{money(item.price)}</strong><span>{item.bids.length} public bids</span>{item.status === 'live' && <span><Clock3 size={13} /> {remaining(item.endsAt, now)} left</span>}</div>
             {item.bids.length > 0 && <div className="seller-bid-summary"><span>{item.status === 'live' ? 'Currently leading' : 'Provisional winner'}</span><strong>{[...item.bids].sort((a, b) => b.amount - a.amount || b.time - a.time)[0].bidder}</strong><b>{money(Math.max(...item.bids.map((bid) => bid.amount)))}</b></div>}
             {item.bids.length > 0 && <details className="seller-bid-history"><summary>View public bid history <span>{item.bids.length}</span></summary>{[...item.bids].sort((a, b) => b.amount - a.amount).map((bid) => <div key={`${bid.bidderId}-${bid.time}`}><strong>{bid.bidder}</strong><time>{new Date(bid.time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time><b>{money(bid.amount)}</b></div>)}</details>}
+            {item.questions.length > 0 && <section className="seller-questions"><h3><span>Buyer questions</span><small>{item.questions.filter((question) => !question.answer).length} unanswered</small></h3>{item.questions.map((question) => <article key={question.id}><strong>{question.author}</strong><p>{question.text}</p>{question.answer ? <div className="seller-answer"><span>YOUR ANSWER</span>{question.answer}</div> : <form onSubmit={async (event) => { event.preventDefault(); const form = event.currentTarget; const answer = String(new FormData(form).get('answer')).trim(); if (!answer) return; await onAnswer(item.id, question.id, answer); form.reset(); }}><input name="answer" placeholder="Write a helpful answer for the buyer..." maxLength={1000} required /><button type="submit">Reply</button></form>}</article>)}</section>}
             {item.status === 'live' && <div className="seller-controls">
               {item.bids.length === 0 && <button className="button-outline" onClick={() => setEditing(item)}><Pencil size={14} /> Edit listing</button>}
               {item.bids.length > 0 && <span className="seller-hint">Editing is locked after the first bid.</span>}

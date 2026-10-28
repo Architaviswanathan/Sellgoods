@@ -181,6 +181,109 @@ class AuthenticationTests(unittest.TestCase):
         )
         self.assertEqual(seller_bid.status_code, 403)
 
+    def test_seller_gets_bid_and_question_alerts_and_can_answer(self) -> None:
+        seller = self.client.post(
+            "/api/auth/signup",
+            json={"name": "Question Seller", "email": "question-seller@campus.edu", "password": "campus-password-123"},
+        ).json()
+        buyer = self.client.post(
+            "/api/auth/signup",
+            json={"name": "Question Buyer", "email": "question-buyer@campus.edu", "password": "campus-password-456"},
+        ).json()
+        seller_headers = {"Authorization": f"Bearer {seller['access_token']}"}
+        buyer_headers = {"Authorization": f"Bearer {buyer['access_token']}"}
+        auction = self.client.post(
+            "/api/auctions",
+            headers=seller_headers,
+            json={
+                "title": "Campus bicycle",
+                "category": "Cycles",
+                "condition": "Good",
+                "description": "A working bike ready for campus use.",
+                "starting_price": 500,
+                "increment": 50,
+                "ends_at": "2030-01-01T12:00:00Z",
+            },
+        ).json()
+
+        seller_question = self.client.post(
+            f"/api/auctions/{auction['id']}/questions",
+            headers=seller_headers,
+            json={"text": "Seller question should be rejected."},
+        )
+        self.assertEqual(seller_question.status_code, 403)
+
+        question = self.client.post(
+            f"/api/auctions/{auction['id']}/questions",
+            headers=buyer_headers,
+            json={"text": "Are both brakes working?"},
+        )
+        self.assertEqual(question.status_code, 201)
+        question_id = question.json()["id"]
+
+        seller_question = self.client.patch(
+            f"/api/auctions/{auction['id']}/questions/{question_id}",
+            headers=seller_headers,
+            json={"answer": "Yes, the brakes were checked this week."},
+        )
+        self.assertEqual(seller_question.status_code, 200)
+        self.assertEqual(seller_question.json()["answer"], "Yes, the brakes were checked this week.")
+
+        buyer_cannot_answer = self.client.patch(
+            f"/api/auctions/{auction['id']}/questions/{question_id}",
+            headers=buyer_headers,
+            json={"answer": "A buyer cannot author the seller reply."},
+        )
+        self.assertEqual(buyer_cannot_answer.status_code, 403)
+
+        seller_alerts = self.client.get("/api/notifications", headers=seller_headers)
+        self.assertEqual(seller_alerts.status_code, 200)
+        self.assertEqual([item["kind"] for item in seller_alerts.json()], ["question"])
+
+        buyer_alerts = self.client.get("/api/notifications", headers=buyer_headers)
+        self.assertEqual(buyer_alerts.status_code, 200)
+        self.assertEqual([item["kind"] for item in buyer_alerts.json()], ["answer"])
+
+        shared_auction = self.client.get("/api/auctions", headers=buyer_headers).json()[0]
+        self.assertEqual(shared_auction["questions"][0]["answer"], "Yes, the brakes were checked this week.")
+
+    def test_seller_cannot_bid_on_own_auction(self) -> None:
+        seller = self.client.post(
+            "/api/auth/signup",
+            json={"name": "Self Bid Seller", "email": "self-bid@campus.edu", "password": "campus-password-123"},
+        ).json()
+        auction = self.client.post(
+            "/api/auctions",
+            headers={"Authorization": f"Bearer {seller['access_token']}"},
+            json={
+                "title": "Seller-only bid test",
+                "category": "Books",
+                "condition": "Good",
+                "description": "An auction owner must not bid on their own listing.",
+                "starting_price": 100,
+                "increment": 10,
+                "ends_at": "2030-01-01T12:00:00Z",
+            },
+        ).json()
+        bid = self.client.post(
+            f"/api/auctions/{auction['id']}/bids",
+            headers={"Authorization": f"Bearer {seller['access_token']}"},
+            json={"amount": 100},
+        )
+        self.assertEqual(bid.status_code, 403)
+
+    def test_frontend_origin_can_preflight_question_answer_patch(self) -> None:
+        response = self.client.options(
+            "/api/auctions/1/questions/1",
+            headers={
+                "Origin": "http://127.0.0.1:5173",
+                "Access-Control-Request-Method": "PATCH",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PATCH", response.headers["access-control-allow-methods"])
+
 
 if __name__ == "__main__":
     unittest.main()

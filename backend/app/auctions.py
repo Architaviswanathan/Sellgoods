@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Auction, Bid, User
-from app.schemas import AuctionCreate, AuctionResponse, AuctionUpdate, BidCreate, BidResponse
+from app.models import Auction, Bid, Notification, Question, User
+from app.schemas import AuctionCreate, AuctionResponse, AuctionUpdate, BidCreate, BidResponse, QuestionResponse
 
 router = APIRouter(prefix="/api/auctions", tags=["auctions"])
 
@@ -29,6 +29,21 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
             amount=bid.amount,
             time=bid.created_at,
         ))
+    questions = database.scalars(
+        select(Question).where(Question.auction_id == auction.id).order_by(Question.created_at, Question.id)
+    ).all()
+    public_questions = []
+    for question in questions:
+        asker = database.get(User, question.asker_id)
+        public_questions.append(QuestionResponse(
+            id=question.id,
+            asker_id=question.asker_id,
+            asker=asker.name if asker else "Campus student",
+            text=question.text,
+            answer=question.answer,
+            created_at=question.created_at,
+            answered_at=question.answered_at,
+        ))
     return AuctionResponse(
         id=auction.id,
         seller_id=auction.seller_id,
@@ -44,6 +59,7 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
         ends_at=ends_at,
         status=actual_status,
         bids=public_bids,
+        questions=public_questions,
     )
 
 
@@ -160,6 +176,13 @@ def place_bid(
     if ends_at - datetime.now(timezone.utc) <= timedelta(seconds=30):
         auction.ends_at = datetime.now(timezone.utc) + timedelta(seconds=60)
     database.add(bid)
+    database.add(Notification(
+        recipient_id=auction.seller_id,
+        actor_id=current_user.id,
+        auction_id=auction.id,
+        kind="bid",
+        message=f"{current_user.name} bid ₹{payload.amount} on {auction.title}.",
+    ))
     database.commit()
     database.refresh(auction)
     return serialize_auction(auction, database)

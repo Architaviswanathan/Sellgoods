@@ -7,6 +7,8 @@ from app.config import settings
 from app.database import Base, engine
 from app.dependencies import get_current_user
 from app.models import User
+from app.notifications import router as notifications_router
+from app.questions import router as questions_router
 from app.schemas import UserResponse
 
 Base.metadata.create_all(bind=engine)
@@ -16,11 +18,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.include_router(auth_router)
 app.include_router(auctions_router)
+app.include_router(questions_router)
+app.include_router(notifications_router)
 
 @app.get("/api/health")
 def health() -> dict[str, str]:

@@ -42,3 +42,28 @@ class Bid(Base):
     bidder_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Question(Base):
+    __tablename__ = "questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    auction_id: Mapped[int] = mapped_column(ForeignKey("auctions.id"), index=True, nullable=False)
+    asker_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    recipient_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    auction_id: Mapped[int] = mapped_column(ForeignKey("auctions.id"), index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    message: Mapped[str] = mapped_column(String(240), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

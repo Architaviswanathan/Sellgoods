@@ -59,6 +59,36 @@ class BidResponse(BaseModel):
     time: datetime
 
 
+class QuestionCreate(BaseModel):
+    text: str = Field(min_length=3, max_length=1000)
+
+
+class QuestionAnswer(BaseModel):
+    answer: str = Field(min_length=2, max_length=1000)
+
+
+class QuestionResponse(BaseModel):
+    id: int
+    asker_id: int
+    asker: str
+    text: str
+    answer: str | None
+    created_at: datetime
+    answered_at: datetime | None
+
+
+class NotificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    auction_id: int
+    actor_id: int
+    kind: str
+    message: str
+    created_at: datetime
+    read_at: datetime | None
+
+
 class AuctionResponse(BaseModel):
     id: int
     seller_id: int
@@ -75,4 +105,4 @@ class AuctionResponse(BaseModel):
     status: str
     bids: list[BidResponse] = []
     watched: bool = False
-    questions: list[dict] = []
+    questions: list[QuestionResponse] = Field(default_factory=list)

@@ -31,12 +31,14 @@ Run the auth tests from the repository root with `python -m unittest discover -s
 - Listing creation with item details, a local photo, opening bid, increment, and auction duration.
 - Per-item countdowns, public bid history, bid validation, and a 60-second anti-sniping extension for bids in the final 30 seconds.
 - Persistent bids show the leading student's name and full public bid history in the seller workspace; sellers can manage their own listings by account ID.
+- Persistent buyer questions appear on the auction and in the seller workspace; only the listing owner can answer, and the buyer is notified when the answer arrives.
+- Seller inbox alerts persist for new bids and buyer questions. The bell refreshes in the background while signed in, and optional browser pop-ups work when the tab is backgrounded.
 - Item-specific buyer questions, saved auctions, browser notification permission, and a natural-language search assistant.
 - Seller workspace to edit or cancel listings, approve or reject a winning price, and record confirmed or failed pickup outcomes.
 - Automatic bid limit controls and search alerts are represented in the interface.
 
 ## Demo limitations
 
-Authentication, listings, and bids are stored by the backend and shared between authenticated users. Automatic bidding, search alerts, and notifications are UI demonstrations, not persistent services. Listing photos are resized in the browser and stored in the listing record. Do not use this prototype for real transactions.
+Authentication, listings, bids, questions, answers, and activity notifications are stored by the backend and shared between authenticated users. Automatic bidding and saved-search alerts are UI demonstrations, not persistent services. Listing photos are resized in the browser and stored in the listing record. Do not use this prototype for real transactions.
 
-Before a real launch, add formal schema migrations, email verification and account recovery, secure production secret management, durable notifications, and fully persisted seller outcome/handover workflows. Use HTTPS and a secure token storage strategy in production.
+Database tables are created at API startup for local development. Before a real launch, add formal schema migrations, email verification and account recovery, secure production secret management, and fully persisted seller outcome/handover workflows. Use HTTPS and a secure token storage strategy in production.

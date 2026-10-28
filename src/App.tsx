@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownUp, ArrowRight, Bell, Bike, BookOpen, Check, ChevronDown, ChevronRight,
   Clock3, Filter, Heart, HelpCircle, Laptop, Menu, MessageCircle, Plus, Search, LogOut,
@@ -8,9 +8,11 @@ import SellerDashboard from './SellerDashboard';
 import AuthPage from './AuthPage';
 import { fetchCurrentUser, type AuthUser } from './auth';
 import { cancelAuction as cancelAuctionApi, createAuction as createAuctionApi, listAuctions, placeBid as placeBidApi, toAuction, updateAuction as updateAuctionApi } from './auctionApi';
+import { answerAuctionQuestion, askAuctionQuestion, listNotifications, markAllNotificationsRead, markNotificationRead, type CampusNotification } from './activityApi';
+import NotificationPanel from './NotificationPanel';
 
 type Bid = { bidderId: number; bidder: string; amount: number; time: number };
-type Question = { author: string; text: string; answer?: string };
+type Question = { id: number; askerId: number; author: string; text: string; answer?: string; createdAt: number; answeredAt?: number };
 type Auction = {
   id: number; title: string; category: string; condition: string; description: string;
   image: string; price: number; startingPrice: number; increment: number; endsAt: number;
@@ -62,6 +64,9 @@ function App() {
   const [notice, setNotice] = useState('');
   const [assistantQuery, setAssistantQuery] = useState('');
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [notifications, setNotifications] = useState<CampusNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const seenNotificationIds = useRef(new Set<number>());
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -74,15 +79,39 @@ function App() {
     if (!token) return;
     setAuctionsLoading(true);
     setAuctionsError('');
-    listAuctions(token)
-      .then((records) => setAuctions(records.map((record) => toAuction(record) as Auction)))
-      .catch((error: unknown) => {
+    let active = true;
+    let hasLoaded = false;
+    const refresh = async () => {
+      try {
+        const [records, alertRecords] = await Promise.all([listAuctions(token), listNotifications(token)]);
+        if (!active) return;
+        setAuctions(records.map((record) => toAuction(record) as Auction));
+        setNotifications(alertRecords);
+        if (hasLoaded && document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted') {
+          const newAlerts = alertRecords.filter((alert) => !alert.read_at && !seenNotificationIds.current.has(alert.id));
+          if (newAlerts.length) new Notification('Sellgoods activity', { body: newAlerts[0].message });
+        }
+        seenNotificationIds.current = new Set(alertRecords.map((alert) => alert.id));
+        hasLoaded = true;
+        setAuctionsError('');
+      } catch (error) {
+        if (!active) return;
         const message = error instanceof Error ? error.message : 'Could not load campus listings.';
-        setAuctions([]);
-        setAuctionsError(message);
-        showNotice(message);
-      })
-      .finally(() => setAuctionsLoading(false));
+        if (!hasLoaded) {
+          setAuctions([]);
+          setAuctionsError(message);
+          showNotice(message);
+        }
+      } finally {
+        if (active) setAuctionsLoading(false);
+      }
+    };
+    void refresh();
+    const poller = window.setInterval(() => { void refresh(); }, 12_000);
+    return () => {
+      active = false;
+      window.clearInterval(poller);
+    };
   }, [authUser]);
 
   useEffect(() => {
@@ -214,15 +243,67 @@ function App() {
     showNotice(`We'll alert you about “${phrase}” under ${money(Number(limit))}.`);
   };
 
-  const sendQuestion = (event: React.FormEvent<HTMLFormElement>) => {
+  const sendQuestion = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selected) return;
-    const form = new FormData(event.currentTarget);
+    if (!selected || !authUser) return;
+    if (selected.sellerId === authUser.id) return showNotice('Sellers answer questions; they cannot ask on their own listing.');
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const text = String(form.get('question')).trim();
     if (!text) return;
-    setAuctions((items) => items.map((item) => item.id === selected.id ? { ...item, questions: [...item.questions, { author: authUser?.name ?? 'You', text }] } : item));
-    event.currentTarget.reset();
-    showNotice('Question sent to the seller.');
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) return;
+    try {
+      await askAuctionQuestion(token, selected.id, text);
+      const updated = await listAuctions(token);
+      setAuctions(updated.map((record) => toAuction(record) as Auction));
+      formElement.reset();
+      showNotice('Question sent to the seller.');
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Could not send your question.');
+    }
+  };
+
+  const answerQuestion = async (auctionId: number, questionId: number, answer: string) => {
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) return;
+    try {
+      await answerAuctionQuestion(token, auctionId, questionId, answer);
+      const records = await listAuctions(token);
+      setAuctions(records.map((record) => toAuction(record) as Auction));
+      showNotice('Your answer is visible to the buyer.');
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Could not send your answer.');
+    }
+  };
+
+  const openNotification = async (notification: CampusNotification) => {
+    const token = localStorage.getItem('sellgoods.token');
+    if (token && !notification.read_at) {
+      try {
+        const updated = await markNotificationRead(token, notification.id);
+        setNotifications((items) => items.map((item) => item.id === updated.id ? updated : item));
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : 'Could not update notification.');
+      }
+    }
+    const auctionRecords = token ? await listAuctions(token).catch(() => []) : [];
+    if (auctionRecords.length) setAuctions(auctionRecords.map((record) => toAuction(record) as Auction));
+    setSelectedId(notification.auction_id);
+    setActiveTab('Marketplace');
+    setNotificationsOpen(false);
+  };
+
+  const readAllNotifications = async () => {
+    const token = localStorage.getItem('sellgoods.token');
+    if (!token) return;
+    try {
+      await markAllNotificationsRead(token);
+      const readAt = new Date().toISOString();
+      setNotifications((items) => items.map((item) => ({ ...item, read_at: item.read_at ?? readAt })));
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Could not mark notifications as read.');
+    }
   };
 
   const sendAssistant = (event: React.FormEvent) => {
@@ -252,6 +333,9 @@ function App() {
     localStorage.removeItem('sellgoods.token');
     setAuthUser(null);
     setAuctions([]);
+    setNotifications([]);
+    setNotificationsOpen(false);
+    seenNotificationIds.current.clear();
     setActiveTab('Marketplace');
     showNotice('You have logged out.');
   };
@@ -286,7 +370,7 @@ function App() {
         <nav className={`main-nav ${mobileMenu ? 'nav-open' : ''}`}>
           {['Marketplace', 'My activity', 'My listings', 'AI assistant'].map((tab) => <button key={tab} onClick={() => { setActiveTab(tab); setMobileMenu(false); }} className={activeTab === tab ? 'active' : ''}>{tab === 'AI assistant' && <Sparkles size={15} />}{tab}</button>)}
         </nav>
-        <div className="header-actions"><button className="icon-button notification-button" onClick={enableNotifications} title="Enable browser notifications"><Bell size={18} /><span /></button><span className="account-name">{authUser.name}</span><button className="logout-button" onClick={logout}><LogOut size={15} /> Log out</button><button className="icon-button menu-button" onClick={() => setMobileMenu((open) => !open)} aria-label="Toggle navigation">{mobileMenu ? <X size={20} /> : <Menu size={20} />}</button></div>
+        <div className="header-actions"><div className="notification-wrap"><button className="icon-button notification-button" onClick={() => setNotificationsOpen((open) => !open)} aria-label={`Notifications${notifications.filter((item) => !item.read_at).length ? `, ${notifications.filter((item) => !item.read_at).length} unread` : ''}`} title="Open activity notifications"><Bell size={18} />{notifications.some((item) => !item.read_at) && <span className="notification-count">{notifications.filter((item) => !item.read_at).length}</span>}</button>{notificationsOpen && <NotificationPanel notifications={notifications} onOpen={openNotification} onReadAll={readAllNotifications} onEnableBrowserAlerts={enableNotifications} />}</div><span className="account-name">{authUser.name}</span><button className="logout-button" onClick={logout}><LogOut size={15} /> Log out</button><button className="icon-button menu-button" onClick={() => setMobileMenu((open) => !open)} aria-label="Toggle navigation">{mobileMenu ? <X size={20} /> : <Menu size={20} />}</button></div>
       </header>
 
       {activeTab === 'Marketplace' && <main id="home">
@@ -313,7 +397,7 @@ function App() {
 
       {activeTab === 'My activity' && <main className="activity-page"><div className="eyebrow dark-eyebrow"><span /> YOUR CAMPUS EXCHANGE</div><div className="section-heading"><div><h1>Your <span>activity.</span></h1><p className="activity-intro">Keep an eye on the things you care about.</p></div><button className="button-outline" onClick={enableNotifications}><Bell size={16} /> Turn on alerts</button></div><div className="activity-columns"><section><div className="activity-heading"><h2><Heart size={18} /> Saved auctions</h2><span>{auctions.filter((item) => item.watched).length}</span></div>{auctions.filter((item) => item.watched).length ? <div className="activity-list">{auctions.filter((item) => item.watched).map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)}><img src={item.image} alt="" /><span><strong>{item.title}</strong><small>{item.status === 'live' ? `Closes in ${timeLeft(item.endsAt, now)}` : 'Auction closed'}</small></span><b>{money(item.price)}</b><ChevronRight size={17} /></button>)}</div> : <p className="activity-empty">Save an auction with the heart and it will show up here.</p>}</section><section><div className="activity-heading"><h2><Bell size={18} /> Search alerts</h2><button className="small-add" onClick={() => setModal('watch')}><Plus size={15} /> New alert</button></div><div className="alert-placeholder"><span><Search size={20} /></span><strong>Don't miss the right listing.</strong><p>Set a search alert and we'll let you know when something matching turns up.</p><button className="text-link" onClick={() => setModal('watch')}>Create a search alert <ArrowRight size={14} /></button></div></section></div></main>}
 
-      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.sellerId === authUser.id)} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} />}
+      {activeTab === 'My listings' && <SellerDashboard items={auctions.filter((item) => item.sellerId === authUser.id)} now={now} onUpdate={updateAuction} onOutcome={setAuctionOutcome} onAnswer={answerQuestion} />}
 
       <footer className="site-footer"><a className="brand footer-brand" href="#home"><span className="brand-mark"><Tag size={16} strokeWidth={2.5} /></span><span>sellgoods<span className="brand-period">.</span></span></a><span>Good things find their next person.</span><div><button onClick={() => showNotice('All bids and bidder names are public on each auction.')}>The ground rules</button><i /> <button onClick={() => showNotice('Made for campus, by campus.')}>About</button></div><span className="footer-year">CAMPUS, IN CIRCULATION © 2026</span></footer>
 

@@ -14,7 +14,7 @@ export type AuctionRecord = {
   status: string;
   bids: { bidder_id: number; bidder: string; amount: number; time: string }[];
   watched: boolean;
-  questions: { author: string; text: string; answer?: string }[];
+  questions: { id: number; asker_id: number; asker: string; text: string; answer: string | null; created_at: string; answered_at: string | null }[];
 };
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
@@ -90,7 +90,15 @@ export function toAuction(record: AuctionRecord) {
     seller: record.seller,
     bids: record.bids.map((bid) => ({ bidderId: bid.bidder_id, bidder: bid.bidder, amount: bid.amount, time: new Date(bid.time).getTime() })),
     watched: record.watched,
-    questions: record.questions,
+    questions: record.questions.map((question) => ({
+      id: question.id,
+      askerId: question.asker_id,
+      author: question.asker,
+      text: question.text,
+      answer: question.answer ?? undefined,
+      createdAt: new Date(question.created_at).getTime(),
+      answeredAt: question.answered_at ? new Date(question.answered_at).getTime() : undefined,
+    })),
     status: record.status,
   };
 }
