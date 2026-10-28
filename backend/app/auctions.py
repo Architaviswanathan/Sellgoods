@@ -54,6 +54,18 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
             created_at=question.created_at,
             answered_at=question.answered_at,
         ))
+    def _default_image(title: str, category: str) -> str:
+        t = (title + " " + category).lower()
+        if "cycle" in t or "bike" in t or "bicycle" in t:
+            return "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=960&q=85"
+        if "calculator" in t or "scientific" in t or "casio" in t:
+            return "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=960&q=85"
+        if "book" in t or "textbook" in t or "notes" in t:
+            return "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=960&q=85"
+        if "laptop" in t or "phone" in t or "electronics" in t or "charger" in t:
+            return "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=960&q=85"
+        return "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=960&q=85"
+
     return AuctionResponse(
         id=auction.id,
         seller_id=auction.seller_id,
@@ -62,7 +74,7 @@ def serialize_auction(auction: Auction, database: Session) -> AuctionResponse:
         category=auction.category,
         condition=auction.condition,
         description=auction.description,
-        image=auction.image_url or "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=960&q=85",
+        image=auction.image_url or _default_image(auction.title, auction.category),
         price=auction.current_price,
         starting_price=auction.starting_price,
         increment=auction.increment,
